@@ -5,3 +5,4 @@ sqlalchemy
 apscheduler
 psycopg2-binary
 numpy
+pathos

@@ -1,5 +1,5 @@
 import time
-import multiprocessing
+import pathos.multiprocessing as mp
 from datetime import datetime, timedelta
 import requests
 import yfinance as yf
@@ -103,19 +103,20 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 
     df_all = []
     no_data_symbol = []
-    for symbols in chunks(symbol_to_download, batch_size):
-        df_price = yf.download(' '.join(symbols), start=str(start_time), end=str(end_time), interval=timeframe)
-        for symbol in symbols:
-            df_price.columns = df_price.columns.set_levels(df_price.columns.levels[1].str.strip(), level=1)
-            df = df_price.iloc[:, df_price.columns.get_level_values(1) == symbol].droplevel(1, axis=1)
-            df.dropna(inplace=True)
+    process_pool = mp.ProcessingPool(mp.cpu_count())
+    download = lambda symbol: get_history(symbol, interval=timeframe, start=start_time, end=end_time)
 
-            if df.empty:
+    for symbols in chunks(symbol_to_download, batch_size):
+        output = process_pool.map(download, symbols)
+        for df_price, symbol in output:
+            if df_price.empty:
                 no_data_symbol.append(symbol)
+                continue
             else:
+                df = df_price[['Open', 'High', 'Low', 'Close', 'Volume']]
                 df.reset_index(inplace=True)
-                df.drop(columns=['Adj Close'], inplace=True)
                 df.columns = ['datetime', 'open', 'high', 'low', 'close', 'volume']
+                df.dropna(inplace=True)
 
                 df['symbol'] = symbol
                 df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
@@ -125,7 +126,6 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
         del df_all[:]
 
         insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
-        del no_data_symbol[:]
 
 
 def update_db(timeframe, batch_size=500):
@@ -147,10 +147,10 @@ def update_db(timeframe, batch_size=500):
     df_all = []
     no_data_symbol = []
 
-    process_pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    process_pool = mp.ProcessingPool(mp.cpu_count())
     execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'\"{timeframe}\"'))
     for args in chunks(arguments, batch_size):
-        output = process_pool.starmap(get_history, args)
+        output = process_pool.map(get_history, args)
         for df_price, symbol in output:
             if df_price.empty:
                 no_data_symbol.append(symbol)
@@ -171,8 +171,8 @@ def update_db(timeframe, batch_size=500):
         insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
 
 
-def get_history(symbol, start, end):
-    df = yf.download(symbol, start=start, end=end, interval='15m', threads=False)
+def get_history(symbol, interval, start, end):
+    df = yf.download(symbol, start=start, end=end, interval=interval, threads=False)
     time.sleep(0.3)
     return df, symbol
 
@@ -203,3 +203,4 @@ if __name__ == '__main__':
     sched.add_job(update, 'cron', id='update', hour='15-23', minute='*/31', day_of_week='mon-fri')
     sched.add_job(refresh, 'cron', id='refresh', hour=13)
     sched.start()
+
