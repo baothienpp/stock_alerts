@@ -106,6 +106,7 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 
     for symbols in chunks(symbol_to_download, batch_size):
         output = process_pool.map(download, symbols)
+
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         no_data_symbol = [obj for obj in output if isinstance(obj, str)]
 
@@ -132,31 +133,19 @@ def update_db(timeframe, batch_size=500):
     current_db['end'] = end_time
 
     arguments = [(row[1]['symbol'], row[1]['max'], str(row[1]['end'])) for row in current_db.iterrows()]
-    df_all = []
-    no_data_symbol = []
 
     process_pool = mp.ProcessingPool(mp.cpu_count())
     execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'\"{timeframe}\"'))
     for args in chunks(arguments, batch_size):
         output = process_pool.map(get_history, args)
-        for df_price, symbol in output:
-            if df_price.empty:
-                no_data_symbol.append(symbol)
-                continue
-            else:
-                df = df_price[['Open', 'High', 'Low', 'Close', 'Volume']]
-                df.reset_index(inplace=True)
-                df.columns = ['datetime', 'open', 'high', 'low', 'close', 'volume']
-                df.dropna(inplace=True)
 
-                df['symbol'] = symbol
-                df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
-                df_all.append(df.copy())
+        data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
+        no_data_symbol = [obj for obj in output if isinstance(obj, str)]
 
-        insert_on_conflict_do_update(pd.concat(df_all), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
-        del df_all[:]
-
+        insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
         insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
+    process_pool.close()
+    process_pool.join()
 
 
 def get_history(symbol, interval, start, end):
@@ -176,7 +165,7 @@ def get_history(symbol, interval, start, end):
             return df
     except Exceptio as e:
         print(e)
-        print(symbol)
+        return symbol
 
 
 def refresh_symbol(timeframe):
@@ -187,8 +176,8 @@ def refresh_symbol(timeframe):
     if SYMBOL_PROVIDER == 'FMP':
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
-        # get_symbols_financialmodelingprep(table=SYMBOL_TABLE)
-        # profile_fmp(table=PROFILE_TABLE, symbol_table=SYMBOL_TABLE)
+        get_symbols_financialmodelingprep(table=SYMBOL_TABLE)
+        profile_fmp(table=PROFILE_TABLE, symbol_table=SYMBOL_TABLE)
     else:
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
@@ -199,9 +188,8 @@ def refresh_symbol(timeframe):
 
 if __name__ == '__main__':
     refresh = lambda: refresh_symbol('60m')
-    # update = lambda: update_db('60m')
-    refresh()
-    # sched = BlockingScheduler()
-    # sched.add_job(update, 'cron', id='update', hour='15-23', minute='*/31', day_of_week='mon-fri')
-    # sched.add_job(refresh, 'cron', id='refresh', hour=13)
-    # sched.start()
+    update = lambda: update_db('60m')
+    sched = BlockingScheduler()
+    sched.add_job(update, 'cron', id='update', hour='15-23', minute='*/31', day_of_week='mon-fri')
+    sched.add_job(refresh, 'cron', id='refresh', hour=1)
+    sched.start()
