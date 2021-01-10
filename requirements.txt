@@ -1,0 +1,7 @@
+requests
+pandas
+yfinance
+sqlalchemy
+apscheduler
+psycopg2-binary
+numpy
