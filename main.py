@@ -103,11 +103,11 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 
     df_all = []
     no_data_symbol = []
-    process_pool = mp.ProcessingPool(mp.cpu_count())
+    process_pool = mp.ProcessPool(nodes=mp.cpu_count())
     download = lambda symbol: get_history(symbol, interval=timeframe, start=start_time, end=end_time)
 
     for symbols in chunks(symbol_to_download, batch_size):
-        output = process_pool.map(download, symbols)
+        output = process_pool.imap(download, symbols)
         for df_price, symbol in output:
             if df_price.empty:
                 no_data_symbol.append(symbol)
