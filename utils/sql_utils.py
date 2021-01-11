@@ -3,7 +3,7 @@ import sqlalchemy
 import numpy as np
 import pandas as pd
 
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy import create_engine
 
 db_secret = 'stock'
@@ -14,7 +14,7 @@ db_uri = f'postgresql://{db_secret}:{db_secret}@{db_host}:{db_port}/{db_secret}'
 print(f"product_domain: {db_uri}")
 
 engine = create_engine(db_uri, pool_pre_ping=True)
-Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
 
 @contextmanager
@@ -118,9 +118,9 @@ def insert_on_conflict_do_update(df: pd.DataFrame, table_name, schema='public', 
             excluded = " Set "
             for col in column_names_list:
                 excluded = '{excluded} "{col_name_left_side}"=EXCLUDED."{col_name_right_side}",'.format(
-                                                                                                excluded=excluded,
-                                                                                                col_name_left_side=col,
-                                                                                                col_name_right_side=col)
+                    excluded=excluded,
+                    col_name_left_side=col,
+                    col_name_right_side=col)
 
             excluded = excluded[:-1]
             insert_stmt_str = '{insert} ON CONFLICT ({pkey}) DO UPDATE {excluded_stmt};'.format(insert=insert_stmt_str,

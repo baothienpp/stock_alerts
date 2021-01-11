@@ -118,7 +118,7 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 
     process_pool.close()
     process_pool.join()
-    log.info('Finish update')
+    process_pool.clear()
 
 
 def update_db(timeframe, batch_size=500):
@@ -129,6 +129,7 @@ def update_db(timeframe, batch_size=500):
 
     log.info('Get symbols and last date')
     SYMBOL_LAST_DATE_SUBQUERY = SYMBOL_LAST_DATE.replace('{table_name}', f'"{timeframe}"')
+    execute_sql_statement('DROP TABLE IF EXISTS tmp_symbol_lastdate')
     execute_sql_statement(CREATE_TEMPORARY_TABLE.replace('{table_name}', 'tmp_symbol_lastdate').replace('{sub_query}',
                                                                                                         SYMBOL_LAST_DATE_SUBQUERY))
 
@@ -143,13 +144,14 @@ def update_db(timeframe, batch_size=500):
 
     arguments = [(row[1]['symbol'], timeframe, row[1]['datetime'], row[1]['end']) for row in current_db.iterrows()]
 
-    process_pool = mp.ProcessingPool(mp.cpu_count())
     log.info('Delete last date')
     execute_sql_statement(
         DELETE_LAST_DATE.replace('{table_name}', f'"{timeframe}"').replace('{sub_table}', 'tmp_symbol_lastdate'))
 
     download = lambda x: get_history(*x)
     log.info('Start downloading ...')
+
+    process_pool = mp.ProcessingPool(mp.cpu_count())
     for args in chunks(arguments, batch_size):
         output = process_pool.map(download, args)
 
@@ -158,8 +160,11 @@ def update_db(timeframe, batch_size=500):
 
         insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
         insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
+
     process_pool.close()
     process_pool.join()
+    process_pool.clear()
+    log.info('Finish update')
 
 
 def get_history(symbol, interval, start, end):
@@ -203,7 +208,8 @@ def refresh_symbol(timeframe):
 
 if __name__ == '__main__':
     refresh = lambda: refresh_symbol('60m')
-    update = lambda: update_db('60m')
+    update = lambda: update_db('60m', batch_size=10)
+
     sched = BlockingScheduler()
     sched.add_job(update, 'cron', id='update', hour='14-22', minute='28',
                   day_of_week='mon-fri')  # start at 29 because of warmup
