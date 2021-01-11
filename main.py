@@ -3,7 +3,8 @@ import pathos.multiprocessing as mp
 from datetime import datetime, timedelta
 import requests
 import yfinance as yf
-from sql_utils import *
+from utils.sql_utils import *
+from utils.logging import log
 from db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE, SYMBOL_LAST_DATE
 from apscheduler.schedulers.blocking import BlockingScheduler
 
@@ -85,6 +86,7 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
     delisted = read_from_sql_statement('select * from delisted')['symbol'].to_list()
 
     if not isTableExist(table=f"{timeframe}"):
+        log.info(f'table {timeframe} not exist. Creating ...')
         execute_sql_statement(PRICE_TABLE_SQL.replace('{table_name}', f'\"{timeframe}\"'))
     now = datetime.now()
 
@@ -98,6 +100,7 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
     end_time = now + timedelta(days=1)
     end_time = end_time.date()
 
+    log.info('Get symbol list')
     current_symbol = read_from_sql_statement(f'select distinct(symbol) from \"{timeframe}\"')['symbol'].to_list()
     symbol_to_download = list(set(df_company) - set(delisted) - set(current_symbol))
 
@@ -115,14 +118,16 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 
     process_pool.close()
     process_pool.join()
-    print('Finish update')
+    log.info('Finish update')
 
 
 def update_db(timeframe, batch_size=500):
-    print('Updating DB')
+    log.info('Updating DB')
+    log.info('Get delisted symbols')
     delisted = read_from_sql_statement('select * from delisted')['symbol'].to_list()
     now = datetime.now()
 
+    log.info('Get symbols and last date')
     current_db = read_from_sql_statement(SYMBOL_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
     current_db = current_db[~current_db['symbol'].isin(delisted)]
     current_db['datetime'] = current_db['datetime'].dt.date.astype(str)
@@ -135,6 +140,7 @@ def update_db(timeframe, batch_size=500):
     arguments = [(row[1]['symbol'], timeframe, row[1]['datetime'], row[1]['end']) for row in current_db.iterrows()]
 
     process_pool = mp.ProcessingPool(mp.cpu_count())
+    log.info('Delete last date')
     execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
 
     download = lambda x: get_history(*x)
@@ -166,12 +172,12 @@ def get_history(symbol, interval, start, end):
             df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
             return df
     except Exception as e:
-        print(e)
+        log.debug(e)
         return symbol
 
 
 def refresh_symbol(timeframe):
-    print('Refreshing symbols')
+    log.info('Refreshing symbols')
     if not isTableExist(table='delisted'):
         execute_sql_statement(DELISTED_TABLE)
 
@@ -186,7 +192,7 @@ def refresh_symbol(timeframe):
         df_symbols = get_symbols_finhub()
 
     fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000)
-    print('Finish filling database')
+    log.info('Finish filling database')
 
 
 if __name__ == '__main__':
