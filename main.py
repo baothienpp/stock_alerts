@@ -115,6 +115,7 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 
     process_pool.close()
     process_pool.join()
+    print('Finish update')
 
 
 def update_db(timeframe, batch_size=500):
@@ -163,7 +164,7 @@ def get_history(symbol, interval, start, end):
             df['symbol'] = symbol
             df['datetime'] = pd.to_datetime(df['datetime'], utc=True)
             return df
-    except Exceptio as e:
+    except Exception as e:
         print(e)
         return symbol
 
@@ -184,12 +185,13 @@ def refresh_symbol(timeframe):
         df_symbols = get_symbols_finhub()
 
     fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000)
+    print('Finish filling database')
 
 
 if __name__ == '__main__':
     refresh = lambda: refresh_symbol('60m')
     update = lambda: update_db('60m')
     sched = BlockingScheduler()
-    sched.add_job(update, 'cron', id='update', hour='15-23', minute='*/31', day_of_week='mon-fri')
+    sched.add_job(update, 'cron', id='update', hour='14-22', minute='*/31', day_of_week='mon-fri')
     sched.add_job(refresh, 'cron', id='refresh', hour=1)
     sched.start()
