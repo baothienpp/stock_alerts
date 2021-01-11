@@ -144,6 +144,7 @@ def update_db(timeframe, batch_size=500):
     execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
 
     download = lambda x: get_history(*x)
+    log.info('Start downloading ...')
     for args in chunks(arguments, batch_size):
         output = process_pool.map(download, args)
 
