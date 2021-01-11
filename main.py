@@ -133,12 +133,14 @@ def update_db(timeframe, batch_size=500):
 
     current_db['end'] = end_time
 
-    arguments = [(row[1]['symbol'], row[1]['max'], str(row[1]['end'])) for row in current_db.iterrows()]
+    arguments = [(row[1]['symbol'], timeframe, row[1]['max'], str(row[1]['end'])) for row in current_db.iterrows()]
 
     process_pool = mp.ProcessingPool(mp.cpu_count())
     execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'\"{timeframe}\"'))
+
+    f = lambda x: get_history(*x)
     for args in chunks(arguments, batch_size):
-        output = process_pool.map(get_history, args)
+        output = process_pool.map(f, args)
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         no_data_symbol = [obj for obj in output if isinstance(obj, str)]
