@@ -1,0 +1,1 @@
+docker run --name stock_db -e POSTGRES_PASSWORD=stock -e POSTGRES_USER=stock -e POSTGRES_DB=stock -p 54329:5432  -d postgres
