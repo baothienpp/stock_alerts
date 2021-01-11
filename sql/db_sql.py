@@ -29,14 +29,13 @@ SYMBOL_LAST_DATE = '''SELECT symbol, datetime
                             ) T
                      WHERE T.r=1'''
 
+CREATE_TEMPORARY_TABLE = '''
+                            CREATE TEMPORARY TABLE {table_name} AS
+                                {sub_query}
+                         '''
 DELETE_LAST_DATE = '''DELETE FROM {table_name} as A WHERE EXISTS (
-                        SELECT 1 FROM (SELECT symbol, datetime FROM (
-                                           SELECT *, row_number() OVER (PARTITION BY symbol ORDER BY datetime DESC) r 
-                                           FROM {table_name}
-                                            ) T
-                                        WHERE T.r=1
-                                        ) C
-                                 WHERE A.symbol = C.symbol and A.datetime = C.datetime 
+                        SELECT 1 FROM {sub_table} C
+                            WHERE A.symbol = C.symbol and A.datetime = C.datetime 
                          )
                     '''
 CHECK_COL = """SELECT column_name 

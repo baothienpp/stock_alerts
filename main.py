@@ -5,7 +5,7 @@ import requests
 import yfinance as yf
 from utils.sql_utils import *
 from utils.logging import log
-from db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE, SYMBOL_LAST_DATE
+from sql.db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE, SYMBOL_LAST_DATE, CREATE_TEMPORARY_TABLE
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 pd.options.mode.chained_assignment = None
@@ -128,6 +128,10 @@ def update_db(timeframe, batch_size=500):
     now = datetime.now()
 
     log.info('Get symbols and last date')
+    SYMBOL_LAST_DATE_SUBQUERY = SYMBOL_LAST_DATE.replace('{table_name}', f'"{timeframe}"')
+    execute_sql_statement(CREATE_TEMPORARY_TABLE.replace('{table_name}', 'tmp_symbol_lastdate').replace('{sub_query}',
+                                                                                                        SYMBOL_LAST_DATE_SUBQUERY))
+
     current_db = read_from_sql_statement(SYMBOL_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
     current_db = current_db[~current_db['symbol'].isin(delisted)]
     current_db['datetime'] = current_db['datetime'].dt.date.astype(str)
@@ -141,7 +145,8 @@ def update_db(timeframe, batch_size=500):
 
     process_pool = mp.ProcessingPool(mp.cpu_count())
     log.info('Delete last date')
-    execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
+    execute_sql_statement(
+        DELETE_LAST_DATE.replace('{table_name}', f'"{timeframe}"').replace('{sub_table}', 'tmp_symbol_lastdate'))
 
     download = lambda x: get_history(*x)
     log.info('Start downloading ...')
