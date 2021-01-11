@@ -22,17 +22,27 @@ DELISTED_TABLE = '''CREATE TABLE delisted (
                         UNIQUE (symbol)
                     )'''
 
-DELETE_LAST_DATE = '''DELETE FROM {table_name} as A
-                        WHERE EXISTS (
-                            SELECT 1 FROM (
-                                        SELECT symbol, max(datetime) as datetime FROM {table_name}
-                                        GROUP BY symbol) C
-                            WHERE A.symbol = C.symbol and A.datetime = C.datetime
-                        )'''
+SYMBOL_LAST_DATE = '''SELECT symbol, datetime 
+                      FROM (
+                           SELECT *, row_number() OVER (PARTITION BY symbol ORDER BY datetime DESC) r 
+                           FROM {table_name}
+                            ) T
+                     WHERE T.r=1'''
 
+DELETE_LAST_DATE = '''DELETE FROM {table_name} as A WHERE EXISTS (
+                        SELECT 1 FROM (SELECT symbol, datetime FROM (
+                                           SELECT *, row_number() OVER (PARTITION BY symbol ORDER BY datetime DESC) r 
+                                           FROM {table_name}
+                                            ) T
+                                        WHERE T.r=1
+                                        ) C
+                                 WHERE A.symbol = C.symbol and A.datetime = C.datetime 
+                         )
+                    '''
 CHECK_COL = """SELECT column_name 
                 FROM information_schema.columns 
                 WHERE table_name='{table_name}' and column_name='{col_name}'"""
 
 ADD_COL = """ALTER TABLE {table_name} 
              ADD COLUMN {col_name} {data_type}"""
+

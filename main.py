@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import requests
 import yfinance as yf
 from sql_utils import *
-from db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE
+from db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE, SYMBOL_LAST_DATE
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 pd.options.mode.chained_assignment = None
@@ -123,24 +123,23 @@ def update_db(timeframe, batch_size=500):
     delisted = read_from_sql_statement('select * from delisted')['symbol'].to_list()
     now = datetime.now()
 
-    current_db = read_from_sql_statement(f'''SELECT symbol, max(datetime) FROM public.\"{timeframe}\" 
-                                                                          GROUP BY symbol''')
+    current_db = read_from_sql_statement(SYMBOL_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
     current_db = current_db[~current_db['symbol'].isin(delisted)]
-    current_db['max'] = current_db['max'].dt.date.astype(str)
+    current_db['datetime'] = current_db['datetime'].dt.date.astype(str)
 
     end_time = now + timedelta(days=1)
     end_time = end_time.date()
 
-    current_db['end'] = end_time
+    current_db['end'] = str(end_time)
 
-    arguments = [(row[1]['symbol'], timeframe, row[1]['max'], str(row[1]['end'])) for row in current_db.iterrows()]
+    arguments = [(row[1]['symbol'], timeframe, row[1]['datetime'], row[1]['end']) for row in current_db.iterrows()]
 
     process_pool = mp.ProcessingPool(mp.cpu_count())
-    execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'\"{timeframe}\"'))
+    execute_sql_statement(DELETE_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
 
-    f = lambda x: get_history(*x)
+    download = lambda x: get_history(*x)
     for args in chunks(arguments, batch_size):
-        output = process_pool.map(f, args)
+        output = process_pool.map(download, args)
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         no_data_symbol = [obj for obj in output if isinstance(obj, str)]
@@ -194,6 +193,7 @@ if __name__ == '__main__':
     refresh = lambda: refresh_symbol('60m')
     update = lambda: update_db('60m')
     sched = BlockingScheduler()
-    sched.add_job(update, 'cron', id='update', hour='14-22', minute='*/31', day_of_week='mon-fri')
+    sched.add_job(update, 'cron', id='update', hour='14-22', minute='28',
+                  day_of_week='mon-fri')  # start at 29 because of warmup
     sched.add_job(refresh, 'cron', id='refresh', hour=1)
     sched.start()
