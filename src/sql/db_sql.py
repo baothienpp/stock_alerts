@@ -38,10 +38,18 @@ DELETE_LAST_DATE = '''DELETE FROM {table_name} as A WHERE EXISTS (
                             WHERE A.symbol = C.symbol and A.datetime = C.datetime 
                          )
                     '''
-CHECK_COL = """SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name='{table_name}' and column_name='{col_name}'"""
 
 ADD_COL = """ALTER TABLE {table_name} 
              ADD COLUMN {col_name} {data_type}"""
 
+SELECT_LAST_N_ROWS = """SELECT * FROM (
+                          SELECT
+                            ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY datetime DESC) AS r,
+                            t.*
+                          FROM "{table_name}" t 
+                          WHERE symbol in ({symbols})) x
+                        WHERE x.r <= {n_rows}"""
+
+SELECT_LAST_N_ROWS_FROM_SYMBOL = """ SELECT * FROM "{table_name}"
+                                     WHERE symbol='{symbol}'
+                                     ORDER BY datetime DESC limit {n_rows}"""

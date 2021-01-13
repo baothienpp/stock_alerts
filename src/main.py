@@ -1,16 +1,22 @@
 import time
-import pathos.multiprocessing as mp
+import json
 from datetime import datetime, timedelta
 import requests
+import pathos.multiprocessing as mp
 import yfinance as yf
-from utils.sql_utils import *
-from utils.logging import log
-from sql.db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE, SYMBOL_LAST_DATE, CREATE_TEMPORARY_TABLE
+from kafka import KafkaProducer
+from src.utils.sql_utils import *
+from src.utils.logging import log
+from src.sql.db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE, SYMBOL_LAST_DATE, CREATE_TEMPORARY_TABLE
+from src.kafka_setting import KAFKA_TOPIC, KafkaMessage
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 pd.options.mode.chained_assignment = None
 
 SYMBOL_PROVIDER = 'FMP'
+
+producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
+                         value_serializer=lambda m: json.dumps(m).encode('utf-8'))
 
 
 def get_symbols_finhub() -> pd.DataFrame:
@@ -116,9 +122,16 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
         insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
         insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
 
+        message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
+        log.info(f'Sending data to indicator consumer: {message}')
+        producer.send(KAFKA_TOPIC, message)
+        producer.flush()
+
     process_pool.close()
     process_pool.join()
     process_pool.clear()
+
+    log.info('Finish refresh')
 
 
 def update_db(timeframe, batch_size=500):
@@ -161,9 +174,18 @@ def update_db(timeframe, batch_size=500):
         insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
         insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
 
+        symbols = [arg[0] for arg in args]
+        message = KafkaMessage(table=timeframe, symbols=symbols, period=100,
+                               mode='full').to_dict()
+        log.info(f'Sending data to indicator consumer: {message}')
+        producer.send(KAFKA_TOPIC, message)
+        producer.flush()
+
+
     process_pool.close()
     process_pool.join()
     process_pool.clear()
+
     log.info('Finish update')
 
 
@@ -203,13 +225,13 @@ def refresh_symbol(timeframe):
         df_symbols = get_symbols_finhub()
 
     fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000)
-    log.info('Finish filling database')
 
 
 if __name__ == '__main__':
     refresh = lambda: refresh_symbol('60m')
     update = lambda: update_db('60m', batch_size=10)
 
+    update()
     sched = BlockingScheduler()
     sched.add_job(update, 'cron', id='update', hour='14-22', minute='28',
                   day_of_week='mon-fri')  # start at 29 because of warmup
