@@ -7,13 +7,14 @@ import yfinance as yf
 from kafka import KafkaProducer
 from src.utils.sql_utils import *
 from src.utils.logging import log
-from src.sql.db_sql import PRICE_TABLE_SQL, DELETE_LAST_DATE, DELISTED_TABLE, SYMBOL_LAST_DATE, CREATE_TEMPORARY_TABLE
+from src.sql.db_sql import *
 from src.kafka_setting import KAFKA_TOPIC, KafkaMessage
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 pd.options.mode.chained_assignment = None
 
 SYMBOL_PROVIDER = 'FMP'
+delist_exchange = ['HKSE', 'MCX', 'ASX']
 
 producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
                          value_serializer=lambda m: json.dumps(m).encode('utf-8'))
@@ -215,6 +216,10 @@ def refresh_symbol(timeframe):
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
         get_symbols_financialmodelingprep(table=SYMBOL_TABLE)
         profile_fmp(table=PROFILE_TABLE, symbol_table=SYMBOL_TABLE)
+
+        exchanges = ", ".join("'{0}'".format(e) for e in delist_exchange)
+        symbols = read_from_sql_statement(EXECLUDE_EXCHANGE.format(profile_table=PROFILE_TABLE, exchange=exchanges))
+        insert_on_conflict_do_update(symbols, table_name='delisted')
     else:
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
@@ -226,6 +231,8 @@ def refresh_symbol(timeframe):
 if __name__ == '__main__':
     if not isTableExist(table='delisted'):
         execute_sql_statement(DELISTED_TABLE)
+    if not isTableExist(table='whitelist'):
+        execute_sql_statement(WHITELIST_TABLE)
 
     refresh = lambda: refresh_symbol('60m')
     update = lambda: update_db('60m')

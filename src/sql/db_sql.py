@@ -22,6 +22,11 @@ DELISTED_TABLE = '''CREATE TABLE delisted (
                         UNIQUE (symbol)
                     )'''
 
+WHITELIST_TABLE = '''CREATE TABLE whitelist (
+                        symbol varchar NULL,
+                        UNIQUE (symbol)
+                    )'''
+
 SYMBOL_LAST_DATE = '''SELECT symbol, datetime 
                       FROM (
                            SELECT *, row_number() OVER (PARTITION BY symbol ORDER BY datetime DESC) r 
@@ -53,3 +58,5 @@ SELECT_LAST_N_ROWS = """SELECT * FROM (
 SELECT_LAST_N_ROWS_FROM_SYMBOL = """ SELECT * FROM "{table_name}"
                                      WHERE symbol='{symbol}'
                                      ORDER BY datetime DESC limit {n_rows}"""
+
+EXECLUDE_EXCHANGE = """ SELECT symbol FROM {profile_table} WHERE exchange IN ({exchange})"""
