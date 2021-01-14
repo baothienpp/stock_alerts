@@ -175,12 +175,10 @@ def update_db(timeframe, batch_size=500):
         insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
 
         symbols = [arg[0] for arg in args]
-        message = KafkaMessage(table=timeframe, symbols=symbols, period=100,
-                               mode='full').to_dict()
+        message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='append').to_dict()
         log.info(f'Sending data to indicator consumer: {message}')
         producer.send(KAFKA_TOPIC, message)
         producer.flush()
-
 
     process_pool.close()
     process_pool.join()
@@ -229,9 +227,8 @@ def refresh_symbol(timeframe):
 
 if __name__ == '__main__':
     refresh = lambda: refresh_symbol('60m')
-    update = lambda: update_db('60m', batch_size=10)
+    update = lambda: update_db('60m')
 
-    update()
     sched = BlockingScheduler()
     sched.add_job(update, 'cron', id='update', hour='14-22', minute='28',
                   day_of_week='mon-fri')  # start at 29 because of warmup

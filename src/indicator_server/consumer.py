@@ -11,6 +11,7 @@ pd.options.mode.chained_assignment = None
 
 consumer = KafkaConsumer(KAFKA_TOPIC,
                          group_id=KAFKA_GROUP_ID,
+                         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
                          bootstrap_servers=['localhost:9092'])
 
 
@@ -28,6 +29,7 @@ def add_indicator(df, symbol, period):
     df_symbol.reset_index().drop(columns=['index'], inplace=True)
     df_symbol['william'] = TA.WILLIAMS(df_symbol, period)
     df_symbol.dropna(inplace=True)
+    insert_on_conflict_do_update(df_symbol, table_name=f'\"{table}\"', schema='public', batch=5000)
     return df_symbol.copy()
 
 
@@ -46,6 +48,7 @@ if __name__ == '__main__':
             continue
 
         if not isColumnExist('william', table):
+            log.info('Column not exists. Creating ...')
             execute_sql_statement(ADD_COL.format(table_name=f'"{table}"', col_name='william', data_type='numeric'))
 
         symbols_string_list = ", ".join("'{0}'".format(s) for s in symbols)
@@ -61,5 +64,5 @@ if __name__ == '__main__':
         process = lambda x: add_indicator(df_selected, x, period=period)
         output = [process(symbol) for symbol in symbols]
 
-        insert_on_conflict_do_update(pd.concat(output), table_name=f'\"{table}\"', schema='public', batch=5000)
+        log.info('Inserting into db ...')
         log.info('Finish')
