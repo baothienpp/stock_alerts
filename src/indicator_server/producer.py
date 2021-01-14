@@ -58,6 +58,5 @@ message = {'table': '60m',
                        'HSV.L', 'HSX.L', 'HTWS.L', 'HUT.TO', 'HYLB', 'HZNP', 'IBB', 'IBDM', 'IBTX', 'IBULHSGFIN.NS',
                        'ICD', 'ICICIBANK.NS', 'IDA'], 'period': 100, 'mode': 'append'}
 
-for i in range(3):
-    producer.send('indicators', message)
-    producer.flush()
+producer.send('indicators', message)
+producer.flush()
