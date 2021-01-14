@@ -1,4 +1,5 @@
 import json
+import pathos.multiprocessing as mp
 from src.utils.logging import log
 from kafka import KafkaConsumer
 
@@ -29,14 +30,14 @@ def add_indicator(df, symbol, period):
     df_symbol.reset_index().drop(columns=['index'], inplace=True)
     df_symbol['william'] = TA.WILLIAMS(df_symbol, period)
     df_symbol.dropna(inplace=True)
-    insert_on_conflict_do_update(df_symbol, table_name=f'\"{table}\"', schema='public', batch=5000)
-    return df_symbol.copy()
+
+    return df_symbol
 
 
 if __name__ == '__main__':
     for message in consumer:
         try:
-            message = json.loads(message.value)
+            message = message.value
             log.info(message)
             table = message['table']
             symbols = message['symbols']
@@ -62,7 +63,10 @@ if __name__ == '__main__':
         df_selected = prefilter(df_selected)
 
         process = lambda x: add_indicator(df_selected, x, period=period)
-        output = [process(symbol) for symbol in symbols]
+        pool = mp.Pool(mp.cpu_count())
+        output = pool.map(process, symbols)
+    # output = [process(symbol) for symbol in symbols]
 
         log.info('Inserting into db ...')
+        insert_on_conflict_do_update(pd.concat(output), table_name=f'\"{table}\"', schema='public', batch=5000)
         log.info('Finish')

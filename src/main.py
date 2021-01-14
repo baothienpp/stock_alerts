@@ -209,8 +209,6 @@ def get_history(symbol, interval, start, end):
 
 def refresh_symbol(timeframe):
     log.info('Refreshing symbols')
-    if not isTableExist(table='delisted'):
-        execute_sql_statement(DELISTED_TABLE)
 
     if SYMBOL_PROVIDER == 'FMP':
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
@@ -226,6 +224,9 @@ def refresh_symbol(timeframe):
 
 
 if __name__ == '__main__':
+    if not isTableExist(table='delisted'):
+        execute_sql_statement(DELISTED_TABLE)
+
     refresh = lambda: refresh_symbol('60m')
     update = lambda: update_db('60m')
 
