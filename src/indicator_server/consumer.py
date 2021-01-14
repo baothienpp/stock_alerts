@@ -52,23 +52,24 @@ if __name__ == '__main__':
             log.info('Column not exists. Creating ...')
             execute_sql_statement(ADD_COL.format(table_name=f'"{table}"', col_name='william', data_type='numeric'))
 
-        symbols_string_list = ", ".join("'{0}'".format(s) for s in symbols)
+        for chunk in chunks(symbols, batch_size=20):
+            symbols_string_list = ", ".join("'{0}'".format(s) for s in chunk)
 
-        log.info('Get data ...')
-        if mode == 'full':
-            df_selected = read_from_sql_statement(
-                f'''SELECT * FROM "{table}" WHERE symbol in ({symbols_string_list})''')
-        else:
-            df_selected = read_from_sql_statement(
-                SELECT_LAST_N_ROWS.format(table_name='60m', n_rows=period + 10, symbols=symbols_string_list))
-        df_selected = prefilter(df_selected)
+            log.info('Get data ...')
+            if mode == 'full':
+                df_selected = read_from_sql_statement(
+                    f'''SELECT * FROM "{table}" WHERE symbol in ({symbols_string_list})''')
+            else:
+                df_selected = read_from_sql_statement(
+                    SELECT_LAST_N_ROWS.format(table_name='60m', n_rows=period + 10, symbols=symbols_string_list))
+            df_selected = prefilter(df_selected)
 
-        log.info('Processing data ...')
-        process = lambda x: add_indicator(df_selected, x, period=period)
-        # pool = mp.Pool(mp.cpu_count())
-        # output = pool.map(process, symbols)
-        output = [process(symbol) for symbol in symbols]
+            log.info('Processing data ...')
+            process = lambda x: add_indicator(df_selected, x, period=period)
+            # pool = mp.Pool(mp.cpu_count())
+            # output = pool.map(process, symbols)
+            output = [process(symbol) for symbol in chunk]
 
-        log.info('Inserting into db ...')
-        insert_on_conflict_do_update(pd.concat(output), table_name=f'\"{table}\"', schema='public', batch=5000)
+            log.info('Inserting into db ...')
+            insert_on_conflict_do_update(pd.concat(output), table_name=f'\"{table}\"', schema='public', batch=5000)
         log.info('Finish')
