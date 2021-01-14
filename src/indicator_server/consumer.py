@@ -63,9 +63,9 @@ if __name__ == '__main__':
         df_selected = prefilter(df_selected)
 
         process = lambda x: add_indicator(df_selected, x, period=period)
-        pool = mp.Pool(mp.cpu_count())
-        output = pool.map(process, symbols)
-    # output = [process(symbol) for symbol in symbols]
+        # pool = mp.Pool(mp.cpu_count())
+        # output = pool.map(process, symbols)
+        output = [process(symbol) for symbol in symbols]
 
         log.info('Inserting into db ...')
         insert_on_conflict_do_update(pd.concat(output), table_name=f'\"{table}\"', schema='public', batch=5000)
