@@ -16,8 +16,9 @@ pd.options.mode.chained_assignment = None
 SYMBOL_PROVIDER = 'FMP'
 delist_exchange = ['HKSE', 'MCX', 'ASX']
 
-producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
-                         value_serializer=lambda m: json.dumps(m).encode('utf-8'))
+# producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
+#                          value_serializer=lambda m: json.dumps(m).encode('utf-8'))
+producer = None
 
 
 def get_symbols_finhub() -> pd.DataFrame:
@@ -87,17 +88,19 @@ def process_batch(df_price, symbol):
         return symbol
 
 
-def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
+def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=500):
     df_company = read_from_sql_statement(f'select symbol from {profile_table} where "avgVolume" > {avgVolumne}')[
         'symbol'].to_list()
-    delisted = read_from_sql_statement('select * from delisted')['symbol'].to_list()
+
+    delisted = read_from_sql_statement(f"select * from delisted where timeframe = '{timeframe}'")['symbol'].to_list()
+    whitelist = read_from_sql_statement('select * from whitelist')['symbol'].to_list()
 
     if not isTableExist(table=f"{timeframe}"):
         log.info(f'table {timeframe} not exist. Creating ...')
         execute_sql_statement(PRICE_TABLE_SQL.replace('{table_name}', f'\"{timeframe}\"'))
     now = datetime.now()
 
-    if timeframe == '60m':
+    if timeframe == '1d':
         start_time = now - timedelta(days=729)
     else:
         start_time = now - timedelta(days=59)
@@ -109,19 +112,26 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 
     log.info('Get symbol list')
     current_symbol = read_from_sql_statement(f'select distinct(symbol) from \"{timeframe}\"')['symbol'].to_list()
-    symbol_to_download = list(set(df_company) - set(delisted) - set(current_symbol))
+    symbol_to_download = list((set(df_company) - set(delisted) - set(current_symbol)) | set(whitelist))
 
     process_pool = mp.ProcessPool(nodes=mp.cpu_count())
-    download = lambda symbol: get_history(symbol, interval=timeframe, start=start_time, end=end_time)
+    if period:
+        download = lambda symbol: get_history(symbol, interval=timeframe, period=period)
+    else:
+        download = lambda symbol: get_history(symbol, interval=timeframe, start=start_time, end=end_time)
 
+    # download(symbol_to_download[:10])
     for symbols in chunks(symbol_to_download, batch_size):
         output = process_pool.map(download, symbols)
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         no_data_symbol = [obj for obj in output if isinstance(obj, str)]
 
+        delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
+        delist_df['timeframe'] = timeframe
+
         insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
-        insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
+        insert_on_conflict_ignore(delist_df, table_name='delisted')
 
         message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
         log.info(f'Sending data to indicator consumer: {message}')
@@ -138,7 +148,7 @@ def fill_db(timeframe, profile_table, avgVolumne, batch_size=500):
 def update_db(timeframe, batch_size=500):
     log.info('Updating DB')
     log.info('Get delisted symbols')
-    delisted = read_from_sql_statement('select * from delisted')['symbol'].to_list()
+    delisted = read_from_sql_statement(f"select * from delisted where timeframe = '{timeframe}'")['symbol'].to_list()
     now = datetime.now()
 
     log.info('Get symbols and last date')
@@ -172,8 +182,11 @@ def update_db(timeframe, batch_size=500):
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         no_data_symbol = [obj for obj in output if isinstance(obj, str)]
 
+        delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
+        delist_df['timeframe'] = timeframe
+
         insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
-        insert_on_conflict_do_update(pd.DataFrame(no_data_symbol, columns=['symbol']), table_name='delisted')
+        insert_on_conflict_ignore(delist_df, table_name='delisted')
 
         symbols = [arg[0] for arg in args]
         message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='append').to_dict()
@@ -188,9 +201,12 @@ def update_db(timeframe, batch_size=500):
     log.info('Finish update')
 
 
-def get_history(symbol, interval, start, end):
+def get_history(symbol, interval, start=None, end=None, period=None):
     try:
-        df = yf.download(symbol, start=start, end=end, interval=interval, threads=False)
+        if period:
+            df = yf.download(symbol, period=period, interval=interval, threads=False)
+        else:
+            df = yf.download(symbol, start=start, end=end, interval=interval, threads=False)
         time.sleep(0.1)
         if df.empty:
             return symbol
@@ -208,14 +224,14 @@ def get_history(symbol, interval, start, end):
         return symbol
 
 
-def refresh_symbol(timeframe):
+def refresh_symbol(timeframe, period=None):
     log.info('Refreshing symbols')
 
     if SYMBOL_PROVIDER == 'FMP':
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
-        get_symbols_financialmodelingprep(table=SYMBOL_TABLE)
-        profile_fmp(table=PROFILE_TABLE, symbol_table=SYMBOL_TABLE)
+        # get_symbols_financialmodelingprep(table=SYMBOL_TABLE)
+        # profile_fmp(table=PROFILE_TABLE, symbol_table=SYMBOL_TABLE)
 
         exchanges = ", ".join("'{0}'".format(e) for e in delist_exchange)
         symbols = read_from_sql_statement(EXECLUDE_EXCHANGE.format(profile_table=PROFILE_TABLE, exchange=exchanges))
@@ -225,7 +241,7 @@ def refresh_symbol(timeframe):
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
         df_symbols = get_symbols_finhub()
 
-    fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000)
+    fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000, period=period)
 
 
 if __name__ == '__main__':
@@ -234,11 +250,16 @@ if __name__ == '__main__':
     if not isTableExist(table='whitelist'):
         execute_sql_statement(WHITELIST_TABLE)
 
-    refresh = lambda: refresh_symbol('60m')
-    update = lambda: update_db('60m')
+    refresh_60m = lambda: refresh_symbol('60m')
+    update_60m = lambda: update_db('60m')
 
-    sched = BlockingScheduler()
-    sched.add_job(update, 'cron', id='update', hour='14-22', minute='28',
-                  day_of_week='mon-fri')  # start at 29 because of warmup
-    sched.add_job(refresh, 'cron', id='refresh', hour=1)
-    sched.start()
+    refresh_1d = lambda: refresh_symbol('1d')
+    update_1d = lambda: update_db('1d')
+    #
+    # sched = BlockingScheduler()
+    # sched.add_job(update_60m, 'cron', id='update', hour='14-22', minute='28',
+    #               day_of_week='mon-fri')  # start at 29 because of warmup
+    # sched.add_job(refresh_60m, 'cron', id='refresh', hour=1)
+    # sched.start()
+
+    refresh_1d()

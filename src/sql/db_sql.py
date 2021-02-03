@@ -1,4 +1,4 @@
-SYMBOL_TABLE_SQL = '''CREATE TABLE public.{table_name} (
+SYMBOL_TABLE_SQL = '''CREATE TABLE IF NOT EXISTS public.{table_name} (
                         company varchar NULL,
                         symbol varchar NULL,
                         "type" varchar NULL,
@@ -6,7 +6,7 @@ SYMBOL_TABLE_SQL = '''CREATE TABLE public.{table_name} (
                         UNIQUE (symbol)
                 )'''
 
-PRICE_TABLE_SQL = '''CREATE TABLE public.{table_name} (
+PRICE_TABLE_SQL = '''CREATE TABLE IF NOT EXISTS public.{table_name} (
                         datetime timestamp NULL,
                         symbol varchar NULL,
                         "open" numeric NULL,
@@ -17,12 +17,13 @@ PRICE_TABLE_SQL = '''CREATE TABLE public.{table_name} (
                         UNIQUE (datetime, symbol)
                     )'''
 
-DELISTED_TABLE = '''CREATE TABLE delisted (
+DELISTED_TABLE = '''CREATE TABLE IF NOT EXISTS delisted (
                         symbol varchar NULL,
+                        timeframe varchar NULL,
                         UNIQUE (symbol)
                     )'''
 
-WHITELIST_TABLE = '''CREATE TABLE whitelist (
+WHITELIST_TABLE = '''CREATE TABLE IF NOT EXISTS whitelist (
                         symbol varchar NULL,
                         UNIQUE (symbol)
                     )'''

@@ -1,5 +1,4 @@
 import json
-import pathos.multiprocessing as mp
 from src.utils.logging import log
 from kafka import KafkaConsumer
 
@@ -52,7 +51,12 @@ if __name__ == '__main__':
             log.info('Column not exists. Creating ...')
             execute_sql_statement(ADD_COL.format(table_name=f'"{table}"', col_name='william', data_type='numeric'))
 
-        for chunk in chunks(symbols, batch_size=20):
+        if mode == 'full':
+            batch_size = 100
+        else:
+            batch_size = len(symbols)
+
+        for chunk in chunks(symbols, batch_size=batch_size):
             symbols_string_list = ", ".join("'{0}'".format(s) for s in chunk)
 
             log.info('Get data ...')
@@ -66,8 +70,6 @@ if __name__ == '__main__':
 
             log.info('Processing data ...')
             process = lambda x: add_indicator(df_selected, x, period=period)
-            # pool = mp.Pool(mp.cpu_count())
-            # output = pool.map(process, symbols)
             output = [process(symbol) for symbol in chunk]
 
             log.info('Inserting into db ...')

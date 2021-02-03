@@ -139,6 +139,36 @@ def insert_on_conflict_do_update(df: pd.DataFrame, table_name, schema='public', 
             session.execute(sqlalchemy.text(insert_stmt_str))
 
 
+def insert_on_conflict_ignore(df: pd.DataFrame, table_name, schema='public', batch=10000):
+    df = df.replace({np.nan: 'null'})
+    insert_dict = df.values.tolist()
+    column_names_list = list(df.columns.values)
+    column_names_str = ",".join(['\"{}\"'.format(col_name) for col_name in column_names_list])
+    check_cols = get_primary_keys_of_table(table_name=table_name)
+
+    for chunk in chunks(list_obj=insert_dict, batch_size=batch):
+        insert_stmt_str = "INSERT INTO {schema}.{table_name} ({column_names}) VALUES ".format(schema=schema,
+                                                                                              table_name=table_name,
+                                                                                              column_names=column_names_str)
+        values = []
+        for entry in chunk:
+            values.append(build_values(entry))
+        values = ','.join(values)
+        values = values.strip('[]')
+        values = values.replace('"', '')
+        insert_stmt_str = "{} {}".format(insert_stmt_str, values)
+
+        # get primary keys of table
+
+        pkey = (", ".join(["{e}".format(e=e) for e in check_cols]))
+
+        insert_stmt_str = '{insert} ON CONFLICT ({pkey}) DO NOTHING;'.format(insert=insert_stmt_str,
+                                                                             pkey=pkey)
+        insert_stmt_str = insert_stmt_str.replace("'null'", "null")
+        with session_scope() as session:
+            session.execute(sqlalchemy.text(insert_stmt_str))
+
+
 def chunks(list_obj, batch_size):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(list_obj), batch_size):
