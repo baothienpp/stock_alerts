@@ -46,7 +46,7 @@ DELETE_LAST_DATE = '''DELETE FROM {table_name} as A WHERE EXISTS (
                     '''
 
 ADD_COL = """ALTER TABLE {table_name} 
-             ADD COLUMN {col_name} {data_type}"""
+             ADD COLUMN IF NOT EXISTS {col_name} {data_type}"""
 
 SELECT_LAST_N_ROWS = """SELECT * FROM (
                           SELECT
@@ -59,5 +59,8 @@ SELECT_LAST_N_ROWS = """SELECT * FROM (
 SELECT_LAST_N_ROWS_FROM_SYMBOL = """ SELECT * FROM "{table_name}"
                                      WHERE symbol='{symbol}'
                                      ORDER BY datetime DESC limit {n_rows}"""
+
+SELECT_SYMBOL_WITH_FILTER = '''SELECT {cols} FROM public."{table}"
+                                  WHERE symbol IN ({symbol_list}) {extra_filter}'''
 
 EXECLUDE_EXCHANGE = """ SELECT symbol FROM {profile_table} WHERE exchange IN ({exchange})"""

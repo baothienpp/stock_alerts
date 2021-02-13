@@ -1,62 +1,12 @@
 from kafka import KafkaProducer
+from src.kafka_setting import KAFKA_TOPIC
 import json
 
 producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
                          value_serializer=lambda m: json.dumps(m).encode('utf-8'))
 
-message = {'table': '60m',
-           'symbols': ['1003.HK', '1010.HK', '1030.HK', '1034.HK', '1044.HK', '1068.HK', '1082.HK', '1084.HK',
-                       '1099.HK', '1105.HK', '1116.HK', '1122.HK', '1124.HK', '1128.HK', '1164.HK', '1188.HK',
-                       '1195.HK', '1215.HK', '1223.HK', '1233.HK', '1246.HK', '1258.HK', '1268.HK', '1270.HK',
-                       '1293.HK', '1297.HK', '1300.HK', '1308.HK', '1312.HK', '1316.HK', '1337.HK', '1340.HK',
-                       '1381.HK', '1415.HK', '1432.HK', '1448.HK', '1466.HK', '1498.HK', '1500.HK', '1525.HK',
-                       '1566.HK', '1601.HK', '1633.HK', '1636.HK', '1639.HK', '1645.HK', '1647.HK', '1668.HK',
-                       '1676.HK', '1685.HK', '1697.HK', '1701.HK', '1707.HK', '1722.HK', '1728.HK', '1739.HK',
-                       '1758.HK', '1778.HK', '1795.HK', '1797.HK', '1798.HK', '1799.HK', '1815.HK', '1836.HK',
-                       '1839.HK', '1845.HK', '1883.HK', '1888.HK', '1894.HK', '1935.HK', '1997.HK', '1999.HK',
-                       '2002.HK', '2020.HK', '2022.HK', '2078.HK', '2111.HK', '2136.HK', '2138.HK', '2189.HK',
-                       '2212.HK', '2262.HK', '2280.HK', '2282.HK', '2283.HK', '2310.HK', '2358.HK', '2377.HK',
-                       '2599.HK', '2606.HK', '2688.HK', '2789.HK', '2877.HK', '3309.HK', '3322.HK', '3344.HK',
-                       '3396.HK', '3601.HK', '3718.HK', '3813.HK', '3828.HK', '3830.HK', '3898.HK', '3DP.AX', '6049.HK',
-                       '6055.HK', '6088.HK', '6111.HK', '6162.HK', '6830.HK', '6836.HK', '6888.HK', '6918.HK',
-                       '8020.HK', '8066.HK', '8111.HK', '8128.HK', '8160.HK', '8226.HK', '8279.HK', '8280.HK',
-                       '8293.HK', '8347.HK', '8356.HK', '8362.HK', '8392.HK', '8401.HK', '8413.HK', '8417.HK',
-                       '8420.HK', '8441.HK', '8448.HK', '8462.HK', '8473.HK', '8482.HK', '8510.HK', '8511.HK',
-                       '8512.HK', '8545.HK', '8609.HK', '8631.HK', 'AAJ.AX', 'AARTIIND.NS', 'AAV.TO', 'AB.PA', 'ACAM',
-                       'ACB', 'ACHV', 'ACPH.BR', 'ACTG', 'ADH.AX', 'ADM.L', 'ADS.DE', 'ADVM', 'AEIS', 'AERI', 'AEWU.L',
-                       'AFG', 'AFL', 'AFYA', 'AGCO', 'AGG', 'AGLE', 'AHT', 'AINV', 'AKR', 'AL', 'ALDR.PA', 'ALDX',
-                       'ALGBE.PA', 'ALGN', 'ALJJ', 'ALKKO.PA', 'ALMNG.PA', 'ALNOV.PA', 'ALQGC.PA', 'ALRS.ME', 'ALTR.LS',
-                       'ALV.DE', 'ALVR', 'AMBA', 'AMBC', 'AMBER.NS', 'AME', 'AMLP', 'AMS.L', 'AMS.SW', 'AMX', 'ANAB',
-                       'APDN', 'APGN.L', 'APLLTD.NS', 'APPS', 'APTECHT.NS', 'APTO', 'ARDX', 'ARI', 'ARKF', 'ARKK',
-                       'ARW', 'ASC.L', 'ASHAPURMIN.NS', 'ASIT.L', 'ASP.TO', 'ASQ.AX', 'ASSB.ME', 'ASTRAL.NS', 'ATA.PA',
-                       'ATHX', 'ATMA.L', 'ATOM', 'ATR.L', 'AUDC', 'AUY', 'AVA', 'AVCT.L', 'AVL.TO', 'AVT', 'AVXL',
-                       'AXU', 'AYM.L', 'AYX', 'AZEK', 'AZN', 'B', 'B2H.OL', 'BAH', 'BALAJITELE.NS', 'BALAMINES.NS',
-                       'BALMLAWRIE.NS', 'BALRAMCHIN.NS', 'BBI', 'BCN.AX', 'BCO', 'BCX', 'BDSX', 'BEAT', 'BEM.L',
-                       'BEML.NS', 'BGNE', 'BGS', 'BHR', 'BIOCON.NS', 'BIP-UN.TO', 'BIR.TO', 'BKI.TO', 'BLDP', 'BLDP.TO',
-                       'BLND.L', 'BLNK', 'BLRX', 'BLV', 'BMRN', 'BNED', 'BNP.PA', 'BPT', 'BRBY.L', 'BREE.L', 'BRES.L',
-                       'BRITANNIA.NS', 'BRY', 'BSAC', 'BSBR', 'BSD2.DE', 'BSIF.L', 'BSJL', 'BSM', 'BSPB.ME', 'BUD.AX',
-                       'BVIC.L', 'BWY.L', 'BZH', 'CAPR', 'CAR', 'CARA', 'CASI', 'CATM', 'CAZ.AX', 'CBAY', 'CBRE',
-                       'CCL.L', 'CCOI', 'CDNS', 'CEI', 'CENTRUM.NS', 'CENTURYTEX.NS', 'CENX', 'CEU.TO', 'CFG', 'CFR.SW',
-                       'CGC', 'CGIX', 'CGNX', 'CHA', 'CHCI', 'CHKP', 'CHL', 'CIEN', 'CIG', 'CINF', 'CJR-B.TO', 'CLH',
-                       'CM', 'CMD', 'CNI', 'CNMD', 'CNP.PA', 'CNR', 'CNSL', 'COCP', 'COH.AX', 'COLB', 'COMM', 'CORN',
-                       'CORO.L', 'CPI.L', 'CPRT', 'CQQQ', 'CREI.L', 'CRH', 'CRIS', 'CRNT', 'CRS', 'CRTX', 'CSH-UN.TO',
-                       'CTIC', 'CTLT', 'CURO', 'CVBF', 'CVET', 'CVM', 'CWD.L', 'CWZ.AX', 'CYTK', 'CZR', 'DAF.AX',
-                       'DAI.DE', 'DCAL.NS', 'DCP', 'DHC', 'DHT', 'DIG.L', 'DIVI.L', 'DLB', 'DLR.TO', 'DNB', 'DOC',
-                       'DOF.OL', 'DOG', 'DOGZ', 'DOLLAR.NS', 'DOM.L', 'DOX', 'DPH.L', 'DRI', 'DRX.L', 'DS', 'DSX',
-                       'DTEA', 'DVO.L', 'DXD', 'DXYN', 'DYAI', 'EAAS.L', 'ECK.L', 'EDF.PA', 'EDL.L', 'EDTXU', 'EDU',
-                       'EEM', 'EFG', 'EFN.TO', 'EFX', 'EHTH', 'EIGR', 'ELECON.NS', 'ELF', 'ELIOR.PA', 'ELM.L', 'EMH.L',
-                       'EMN', 'EMQQ', 'ENBL', 'ENG', 'ENT.AX', 'EPAY', 'EPOL', 'EPRT', 'EQ', 'EQH', 'EQT', 'EQX', 'ES',
-                       'ESNT', 'ETM', 'ETX.L', 'EVBG', 'EVG.L', 'EVOK', 'EVTC', 'EWG', 'EWI.L', 'EWT', 'EXEL', 'EXPO',
-                       'EYPT', 'FAN.L', 'FAS', 'FAZ', 'FBIO', 'FBM', 'FCCN.L', 'FCX', 'FDX', 'FESH.ME', 'FFIN', 'FGP.L',
-                       'FHLC', 'FIVE', 'FIVG', 'FIXD', 'FIZZ', 'FLGT', 'FLTR', 'FMTX', 'FNDA', 'FNF', 'FORD',
-                       'FORTIS.NS', 'FPL.AX', 'FREE', 'FRTA', 'FSZ.TO', 'FTK', 'FUN', 'FVI.TO', 'G24.DE',
-                       'GAMMNINFRA.NS', 'GAU', 'GBS', 'GCL.L', 'GCL.TO', 'GCP', 'GD', 'GDDY', 'GFG.DE', 'GFI', 'GFL.TO',
-                       'GHIV', 'GILD', 'GIM', 'GLPI', 'GLSI', 'GLUU', 'GLV.L', 'GMKN.ME', 'GNOG', 'GNUS', 'GPC', 'GPN',
-                       'GPOR.L', 'GRL.L', 'GSBD', 'GSF.OL', 'GSM', 'GSS.NS', 'GSX', 'HAS.L', 'HAVELLS.NS',
-                       'HBLPOWER.NS', 'HDFCAMC.NS', 'HE', 'HEDJ', 'HEIA.AS', 'HEXO', 'HGSH', 'HGT.L', 'HGV',
-                       'HINDALCO.NS', 'HJLI', 'HLIT', 'HLVLTD.NS', 'HMHC', 'HMMJ.TO', 'HND.TO', 'HOD.TO', 'HOG',
-                       'HSV.L', 'HSX.L', 'HTWS.L', 'HUT.TO', 'HYLB', 'HZNP', 'IBB', 'IBDM', 'IBTX', 'IBULHSGFIN.NS',
-                       'ICD', 'ICICIBANK.NS', 'IDA'], 'period': 100, 'mode': 'append'}
+message = {'table': '1d',
+           'symbols': ['HBI', 'BIZD'], 'period': 100, 'mode': 'append'}
 
-producer.send('indicators', message)
+producer.send(KAFKA_TOPIC, message)
 producer.flush()

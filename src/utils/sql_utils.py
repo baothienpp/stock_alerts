@@ -55,7 +55,7 @@ def isTableExist(table, schema='public'):
 def isColumnExist(col, table, schema='public'):
     df = read_from_sql_statement(f"""SELECT EXISTS (SELECT column_name 
                                     FROM information_schema.columns 
-                                    WHERE table_name='{table}' and column_name='{col}')""")
+                                    WHERE table_name='{table}' AND table_schema='{schema}' AND column_name='{col}')""")
 
     return df.iloc[0][0]
 
@@ -167,6 +167,40 @@ def insert_on_conflict_ignore(df: pd.DataFrame, table_name, schema='public', bat
         insert_stmt_str = insert_stmt_str.replace("'null'", "null")
         with session_scope() as session:
             session.execute(sqlalchemy.text(insert_stmt_str))
+
+
+def insert_return_ids(df: pd.DataFrame, table_name, schema='public', sequencial_key='id'):
+    df = df.replace({np.nan: 'null'})
+    insert_dict = df.values.tolist()
+    column_names_list = list(df.columns.values)
+    column_names_str = ",".join(['\"{}\"'.format(col_name) for col_name in column_names_list])
+
+    insert_stmt_str = "INSERT INTO {schema}.{table_name} ({column_names}) VALUES ".format(schema=schema,
+                                                                                          table_name=table_name,
+                                                                                          column_names=column_names_str)
+    values = []
+    for entry in insert_dict:
+        values.append(build_values(entry))
+    values = ','.join(values)
+    values = values.strip('[]')
+    values = values.replace('"', '')
+    insert_stmt_str = "{} {}".format(insert_stmt_str, values)
+
+    insert_stmt_str = '{insert} RETURNING {sequencial_key}'.format(insert=insert_stmt_str,
+                                                                   sequencial_key=sequencial_key)
+    insert_stmt_str = insert_stmt_str.replace("'null'", "null")
+    with session_scope() as session:
+        ids = session.execute(insert_stmt_str).cursor.fetchall()
+    return [val for sublist in ids for val in sublist]
+
+
+def add_columns_if_not_exist(table, column, data_type):
+    ADD_COL = """ALTER TABLE {table_name} 
+                 ADD COLUMN IF NOT EXISTS {col_name} {data_type}"""
+    with session_scope() as session:
+        cursor = session.execute(
+                ADD_COL.format(table_name=f'"{table}"', col_name=column, data_type=data_type))
+    return cursor
 
 
 def chunks(list_obj, batch_size):

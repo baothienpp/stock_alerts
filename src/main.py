@@ -125,22 +125,21 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
         output = process_pool.map(download, symbols)
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
-        no_data_symbol = [obj for obj in output if isinstance(obj, str)]
+        insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
 
+        no_data_symbol = [obj for obj in output if isinstance(obj, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-
-        insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
         insert_on_conflict_ignore(delist_df, table_name='delisted')
 
-        message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
-        log.info(f'Sending data to indicator consumer: {message}')
-        producer.send(KAFKA_TOPIC, message)
-        producer.flush()
-
-    process_pool.close()
-    process_pool.join()
-    process_pool.clear()
+    #     message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
+    #     log.info(f'Sending data to indicator consumer: {message}')
+    #     producer.send(KAFKA_TOPIC, message)
+    #     producer.flush()
+    #
+    # process_pool.close()
+    # process_pool.join()
+    # process_pool.clear()
 
     log.info('Finish refresh')
 
@@ -180,23 +179,22 @@ def update_db(timeframe, batch_size=500):
         output = process_pool.map(download, args)
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
-        no_data_symbol = [obj for obj in output if isinstance(obj, str)]
+        insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
 
+        no_data_symbol = [obj for obj in output if isinstance(obj, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-
-        insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
         insert_on_conflict_ignore(delist_df, table_name='delisted')
 
-        symbols = [arg[0] for arg in args]
-        message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='append').to_dict()
-        log.info(f'Sending data to indicator consumer: {message}')
-        producer.send(KAFKA_TOPIC, message)
-        producer.flush()
-
-    process_pool.close()
-    process_pool.join()
-    process_pool.clear()
+    #     symbols = [arg[0] for arg in args]
+    #     message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='append').to_dict()
+    #     log.info(f'Sending data to indicator consumer: {message}')
+    #     producer.send(KAFKA_TOPIC, message)
+    #     producer.flush()
+    #
+    # process_pool.close()
+    # process_pool.join()
+    # process_pool.clear()
 
     log.info('Finish update')
 
@@ -235,6 +233,7 @@ def refresh_symbol(timeframe, period=None):
 
         exchanges = ", ".join("'{0}'".format(e) for e in delist_exchange)
         symbols = read_from_sql_statement(EXECLUDE_EXCHANGE.format(profile_table=PROFILE_TABLE, exchange=exchanges))
+        symbols['timeframe'] = timeframe
         insert_on_conflict_do_update(symbols, table_name='delisted')
     else:
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
@@ -250,8 +249,8 @@ if __name__ == '__main__':
     if not isTableExist(table='whitelist'):
         execute_sql_statement(WHITELIST_TABLE)
 
-    refresh_60m = lambda: refresh_symbol('60m')
-    update_60m = lambda: update_db('60m')
+    # refresh_60m = lambda: refresh_symbol('60m')
+    # update_60m = lambda: update_db('60m')
 
     refresh_1d = lambda: refresh_symbol('1d')
     update_1d = lambda: update_db('1d')
@@ -262,4 +261,6 @@ if __name__ == '__main__':
     # sched.add_job(refresh_60m, 'cron', id='refresh', hour=1)
     # sched.start()
 
-    refresh_1d()
+    update_1d()
+
+    #TODO: only push to delisted when load full data, if update fails after x times >> push to delisted
