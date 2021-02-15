@@ -28,6 +28,13 @@ WHITELIST_TABLE = '''CREATE TABLE IF NOT EXISTS whitelist (
                         UNIQUE (symbol)
                     )'''
 
+COUNT_FAIL_TABLE = '''CREATE TABLE IF NOT EXISTS count_fail (
+                        symbol varchar NULL,
+                        timeframe varchar NULL,
+                        count int NOT NULL DEFAULT 1,
+                        UNIQUE (symbol, timeframe)
+                    )'''
+
 SYMBOL_LAST_DATE = '''SELECT symbol, datetime 
                       FROM (
                            SELECT *, row_number() OVER (PARTITION BY symbol ORDER BY datetime DESC) r 
@@ -59,6 +66,18 @@ SELECT_LAST_N_ROWS = """SELECT * FROM (
 SELECT_LAST_N_ROWS_FROM_SYMBOL = """ SELECT * FROM "{table_name}"
                                      WHERE symbol='{symbol}'
                                      ORDER BY datetime DESC limit {n_rows}"""
+
+NUMBER_OF_ROWS_TO_UPDATE = """SELECT max(r) FROM (SELECT 
+                                                    symbol , max(datetime ) AS max_available FROM public."{table_name}"
+                                                    WHERE symbol in ({symbols}) AND {non_null_col} IS NOT NULL
+                                                    GROUP BY symbol) A 
+                                JOIN 
+                                     (SELECT
+                                        ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY datetime DESC) AS r,
+                                        t.*
+                                      FROM "{table_name}" t 
+                                      WHERE symbol in ({symbols})) B 
+                                ON A.max_available = B.datetime and A.symbol = B.symbol"""
 
 SELECT_SYMBOL_WITH_FILTER = '''SELECT {cols} FROM public."{table}"
                                   WHERE symbol IN ({symbol_list}) {extra_filter}'''

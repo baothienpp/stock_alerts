@@ -47,8 +47,19 @@ def add_indicators(table='', symbols=None, mode='full', batch_size=50):
             df_selected = read_from_sql_statement(
                 f'''SELECT * FROM "{table}" WHERE symbol in ({symbols_string_list})''')
         else:
+            # Determine the last n null rows
+            offset = read_from_sql_statement(
+                NUMBER_OF_ROWS_TO_UPDATE.format(table_name=table,
+                                                symbols=symbols_string_list, non_null_col='william'))
+            if offset['max'].empty:
+                offset = 5
+            else:
+                offset = offset['max'].iloc[0]
+
+            # TODO select more efficiently by selecting only current row and (current row - n)
             df_selected = read_from_sql_statement(
-                SELECT_LAST_N_ROWS.format(table_name='60m', n_rows=william_period + 10, symbols=symbols_string_list))
+                SELECT_LAST_N_ROWS.format(table_name=table, n_rows=william_period + offset,
+                                          symbols=symbols_string_list))
         df_selected = prefilter(df_selected)
 
         log.info('Processing data ...')
@@ -67,29 +78,40 @@ def add_roc(table='', symbols=None, mode='full', batch_size=100):
         log.info('Get data ...')
         if mode == 'full':
             df_selected = read_from_sql_statement(
-                f'''SELECT date, symbol, close FROM "{table}" WHERE symbol in ({symbols_string_list})''')
+                f'''SELECT datetime, symbol, close FROM "{table}" WHERE symbol in ({symbols_string_list})''')
             date_cols = get_past_date(df_selected)
             # Add columns to table
             for col in date_cols:
                 execute_sql_statement(
                     ADD_COL.format(table_name=f'"{table}"', col_name='roc_' + col, data_type='numeric'))
         else:
+            # Determine the last n null rows
+            offset = read_from_sql_statement(
+                NUMBER_OF_ROWS_TO_UPDATE.format(table_name=table,
+                                                symbols=symbols_string_list, non_null_col='roc_last_day'))
+            if offset['max'].empty:
+                offset = '7d'
+            else:
+                offset = offset['max'].iloc[0]
+                offset = '{}d'.format(offset + 7)
+
             df_selected = read_from_sql_statement(
-                SELECT_LAST_ROW_WITH_EMPTY_COL.format(table=table, symbols=symbols_string_list, empty_col=''))
+                SELECT_LAST_N_ROWS.format(table_name=table, n_rows=1, symbols=symbols_string_list))
+
             date_cols = get_past_date(df_selected)
-            extra_filter = filter_date_range_query(df_selected, date_cols=date_cols)
+            extra_filter = filter_date_range_query(df_selected, date_cols=date_cols, offset=offset)
             query = SELECT_SYMBOL_WITH_FILTER.format(table=table, symbol_list=symbols_string_list,
-                                                     cols='date, symbol, close',
+                                                     cols='datetime, symbol, close',
                                                      extra_filter=f'AND ({extra_filter})')
             df_past_date = read_from_sql_statement(query)
             df_selected = pd.concat([df_selected, df_past_date])
+            df_selected = df_selected[['datetime', 'symbol', 'close']]
+            get_past_date(df_selected)
 
-    df_roc = []
     for col in date_cols:
-        df_roc.append(calculate_roc(df_selected, past_date_col=col))
-
-    log.info('Inserting into db ...')
-    insert_on_conflict_do_update(pd.concat(df_roc), table_name=f'\"{table}\"', schema='public', batch=5000)
+        df_roc = calculate_roc(df_selected, past_date_col=col)
+        log.info('Inserting into db ...')
+        insert_on_conflict_do_update(df_roc, table_name=f'\"{table}\"', schema='public', batch=5000)
 
 
 if __name__ == '__main__':
@@ -97,20 +119,16 @@ if __name__ == '__main__':
         try:
             message = message.value
             log.info(message)
-            table = message['table']
-            symbols = message['symbols']
-            period = message['period']
-            mode = message['mode']
+            table = message.get('table')
+            symbols = message.get('symbols')
+            period = message.get('period')
+            mode = message.get('mode')
         except Exception as e:
             log.debug(e)
             log.debug('Message error')
             continue
 
-        if mode == 'full':
-            batch_size = 100
-        else:
-            batch_size = len(symbols)
-
+        batch_size = 50
         add_indicators(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
         add_roc(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
 

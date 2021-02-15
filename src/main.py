@@ -16,9 +16,8 @@ pd.options.mode.chained_assignment = None
 SYMBOL_PROVIDER = 'FMP'
 delist_exchange = ['HKSE', 'MCX', 'ASX']
 
-# producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
-#                          value_serializer=lambda m: json.dumps(m).encode('utf-8'))
-producer = None
+producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
+                         value_serializer=lambda m: json.dumps(m).encode('utf-8'))
 
 
 def get_symbols_finhub() -> pd.DataFrame:
@@ -88,7 +87,20 @@ def process_batch(df_price, symbol):
         return symbol
 
 
-def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=500):
+def manage_delist(df_delist, main_table, count_table='count_fail', max_try=21):
+    insert_on_conflict_do_increment(df_delist, table_name=count_table, count_col='count')
+    # main_table is also timeframe
+    symbols = read_from_sql_statement(
+        f"SELECT symbol FROM {count_table} WHERE count >= {max_try} AND timeframe = '{main_table}'")
+
+    if not symbols['symbol'].empty:
+        symbols = ", ".join("'{0}'".format(s) for s in symbols)
+        execute_sql_statement(f"DELETE FROM {count_table} WHERE symbol in ({symbols}) AND timeframe = '{main_table}'")
+        execute_sql_statement(f'DELETE FROM "{main_table}" WHERE symbol in ({symbols})')
+        insert_on_conflict_ignore()
+
+
+def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=100):
     df_company = read_from_sql_statement(f'select symbol from {profile_table} where "avgVolume" > {avgVolumne}')[
         'symbol'].to_list()
 
@@ -127,19 +139,19 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
 
-        no_data_symbol = [obj for obj in output if isinstance(obj, str)]
+        no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-        insert_on_conflict_ignore(delist_df, table_name='delisted')
+        manage_delist(delist_df, main_table=timeframe, count_table='count_fail')
 
-    #     message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
-    #     log.info(f'Sending data to indicator consumer: {message}')
-    #     producer.send(KAFKA_TOPIC, message)
-    #     producer.flush()
-    #
-    # process_pool.close()
-    # process_pool.join()
-    # process_pool.clear()
+        message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
+        log.info(f'Sending data to indicator consumer: {message}')
+        producer.send(KAFKA_TOPIC, message)
+        producer.flush()
+
+    process_pool.close()
+    process_pool.join()
+    process_pool.clear()
 
     log.info('Finish refresh')
 
@@ -181,20 +193,20 @@ def update_db(timeframe, batch_size=500):
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
 
-        no_data_symbol = [obj for obj in output if isinstance(obj, str)]
+        no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-        insert_on_conflict_ignore(delist_df, table_name='delisted')
+        manage_delist(delist_df, main_table=timeframe, count_table='count_fail')
 
-    #     symbols = [arg[0] for arg in args]
-    #     message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='append').to_dict()
-    #     log.info(f'Sending data to indicator consumer: {message}')
-    #     producer.send(KAFKA_TOPIC, message)
-    #     producer.flush()
-    #
-    # process_pool.close()
-    # process_pool.join()
-    # process_pool.clear()
+        symbols = [arg[0] for arg in args]
+        message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='append').to_dict()
+        log.info(f'Sending data to indicator consumer: {message}')
+        producer.send(KAFKA_TOPIC, message)
+        producer.flush()
+
+    process_pool.close()
+    process_pool.join()
+    process_pool.clear()
 
     log.info('Finish update')
 
@@ -228,8 +240,8 @@ def refresh_symbol(timeframe, period=None):
     if SYMBOL_PROVIDER == 'FMP':
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
-        # get_symbols_financialmodelingprep(table=SYMBOL_TABLE)
-        # profile_fmp(table=PROFILE_TABLE, symbol_table=SYMBOL_TABLE)
+        get_symbols_financialmodelingprep(table=SYMBOL_TABLE)
+        profile_fmp(table=PROFILE_TABLE, symbol_table=SYMBOL_TABLE)
 
         exchanges = ", ".join("'{0}'".format(e) for e in delist_exchange)
         symbols = read_from_sql_statement(EXECLUDE_EXCHANGE.format(profile_table=PROFILE_TABLE, exchange=exchanges))
@@ -244,23 +256,23 @@ def refresh_symbol(timeframe, period=None):
 
 
 if __name__ == '__main__':
-    if not isTableExist(table='delisted'):
-        execute_sql_statement(DELISTED_TABLE)
-    if not isTableExist(table='whitelist'):
-        execute_sql_statement(WHITELIST_TABLE)
+    execute_sql_statement(DELISTED_TABLE)
+    execute_sql_statement(WHITELIST_TABLE)
+    execute_sql_statement(COUNT_FAIL_TABLE)
 
-    # refresh_60m = lambda: refresh_symbol('60m')
-    # update_60m = lambda: update_db('60m')
+    refresh_60m = lambda: refresh_symbol('60m')
+    update_60m = lambda: update_db('60m')
 
     refresh_1d = lambda: refresh_symbol('1d')
     update_1d = lambda: update_db('1d')
-    #
-    # sched = BlockingScheduler()
-    # sched.add_job(update_60m, 'cron', id='update', hour='14-22', minute='28',
-    #               day_of_week='mon-fri')  # start at 29 because of warmup
-    # sched.add_job(refresh_60m, 'cron', id='refresh', hour=1)
-    # sched.start()
 
-    update_1d()
+    sched = BlockingScheduler()
+    sched.add_job(update_60m, 'cron', id='update', hour='14-22', minute='28',
+                  day_of_week='mon-fri')  # start at 29 because of warmup
+    sched.add_job(refresh_60m, 'cron', id='refresh', hour=1, day_of_week='mon-fri')
 
-    #TODO: only push to delisted when load full data, if update fails after x times >> push to delisted
+    sched.add_job(update_1d, 'cron', id='update', hour=6, day_of_week='mon-fri')
+    sched.add_job(refresh_1d, 'cron', id='refresh', hour=1, day_of_week='mon-fri')
+    sched.start()
+
+    refresh_60m()
