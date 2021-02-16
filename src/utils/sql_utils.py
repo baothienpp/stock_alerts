@@ -157,6 +157,8 @@ def insert_on_conflict_do_update(df: pd.DataFrame, table_name, schema='public', 
         pkey = (", ".join(["{e}".format(e=e) for e in check_cols]))
         excluded = " Set "
         for col in column_names_list:
+            if col in check_cols:
+                continue
             excluded = '{excluded} "{col_name_left_side}"=EXCLUDED."{col_name_right_side}",'.format(
                 excluded=excluded,
                 col_name_left_side=col,

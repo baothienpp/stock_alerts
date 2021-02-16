@@ -1,6 +1,7 @@
 import json
-from src.utils.logging import log
+import certifi
 from kafka import KafkaConsumer
+from src.utils.logging import log
 
 from src.indicator_server.indicators.indicators import TA
 from src.indicator_server.indicators.roc import *
@@ -34,8 +35,9 @@ def calculate_william(df, symbol, period):
 
 
 def add_indicators(table='', symbols=None, mode='full', batch_size=50):
+    log.info('Indicators')
     william_period = 100
-    if isColumnExist(col='william', table=table):
+    if not isColumnExist(col='william', table=table):
         execute_sql_statement(ADD_COL.format(table_name=f'"{table}"', col_name='william', data_type='numeric'))
         mode = 'full'
 
@@ -45,7 +47,8 @@ def add_indicators(table='', symbols=None, mode='full', batch_size=50):
         log.info('Get data ...')
         if mode == 'full':
             df_selected = read_from_sql_statement(
-                f'''SELECT * FROM "{table}" WHERE symbol in ({symbols_string_list})''')
+                f'''SELECT datetime, symbol, open, high, low, close, volume
+                    FROM "{table}" WHERE symbol in ({symbols_string_list})''')
         else:
             # Determine the last n null rows
             offset = read_from_sql_statement(
@@ -71,6 +74,7 @@ def add_indicators(table='', symbols=None, mode='full', batch_size=50):
 
 
 def add_roc(table='', symbols=None, mode='full', batch_size=100):
+    log.info('Rate of change')
     for chunk in chunks(symbols, batch_size=batch_size):
         log.info('Get data ...')
         symbols_string_list = ", ".join("'{0}'".format(s) for s in chunk)
@@ -108,10 +112,10 @@ def add_roc(table='', symbols=None, mode='full', batch_size=100):
             df_selected = df_selected[['datetime', 'symbol', 'close']]
             get_past_date(df_selected)
 
-    for col in date_cols:
-        df_roc = calculate_roc(df_selected, past_date_col=col)
-        log.info('Inserting into db ...')
-        insert_on_conflict_do_update(df_roc, table_name=f'\"{table}\"', schema='public', batch=5000)
+        for col in date_cols:
+            df_roc = calculate_roc(df_selected, past_date_col=col)
+            log.info('Inserting into db ...')
+            insert_on_conflict_do_update(df_roc, table_name=f'\"{table}\"', schema='public', batch=5000)
 
 
 if __name__ == '__main__':
@@ -129,7 +133,9 @@ if __name__ == '__main__':
             continue
 
         batch_size = 50
-        add_indicators(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
-        add_roc(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
+        # add_indicators(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
+
+        if table == '1d':
+            add_roc(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
 
         log.info('Finish')

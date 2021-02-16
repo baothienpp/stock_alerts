@@ -100,7 +100,7 @@ def manage_delist(df_delist, main_table, count_table='count_fail', max_try=21):
         insert_on_conflict_ignore()
 
 
-def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=100):
+def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=500):
     df_company = read_from_sql_statement(f'select symbol from {profile_table} where "avgVolume" > {avgVolumne}')[
         'symbol'].to_list()
 
@@ -137,7 +137,9 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
         output = process_pool.map(download, symbols)
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
-        insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
+        data_df = pd.concat(data)
+        data_df.drop_duplicates(subset=['datetime', 'symbol'], inplace=True)
+        insert_on_conflict_do_update(data_df, table_name=f'\"{timeframe}\"', schema='public', batch=5000)
 
         no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
@@ -252,7 +254,7 @@ def refresh_symbol(timeframe, period=None):
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
         df_symbols = get_symbols_finhub()
 
-    fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000, period=period)
+    fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000, period=period, batch_size=100)
 
 
 if __name__ == '__main__':
@@ -267,12 +269,10 @@ if __name__ == '__main__':
     update_1d = lambda: update_db('1d')
 
     sched = BlockingScheduler()
-    sched.add_job(update_60m, 'cron', id='update', hour='14-22', minute='28',
+    sched.add_job(update_60m, 'cron', id='update_60m', hour='14-22', minute='28',
                   day_of_week='mon-fri')  # start at 29 because of warmup
-    sched.add_job(refresh_60m, 'cron', id='refresh', hour=1, day_of_week='mon-fri')
+    sched.add_job(refresh_60m, 'cron', id='refresh_60m', hour=1, day_of_week='mon-fri')
 
-    sched.add_job(update_1d, 'cron', id='update', hour=6, day_of_week='mon-fri')
-    sched.add_job(refresh_1d, 'cron', id='refresh', hour=1, day_of_week='mon-fri')
+    sched.add_job(update_1d, 'cron', id='update_1d', hour=6, day_of_week='mon-fri')
+    sched.add_job(refresh_1d, 'cron', id='refresh_1d', hour=1, day_of_week='mon-fri')
     sched.start()
-
-    refresh_60m()
