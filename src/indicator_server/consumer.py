@@ -1,5 +1,4 @@
 import json
-import certifi
 from kafka import KafkaConsumer
 from src.utils.logging import log
 
@@ -133,7 +132,7 @@ if __name__ == '__main__':
             continue
 
         batch_size = 50
-        # add_indicators(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
+        add_indicators(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
 
         if table == '1d':
             add_roc(table=table, symbols=symbols, mode=mode, batch_size=batch_size)

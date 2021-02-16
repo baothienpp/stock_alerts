@@ -254,7 +254,7 @@ def refresh_symbol(timeframe, period=None):
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
         df_symbols = get_symbols_finhub()
 
-    fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000, period=period, batch_size=100)
+    fill_db(timeframe, profile_table=PROFILE_TABLE, avgVolumne=200000, period=period)
 
 
 if __name__ == '__main__':
