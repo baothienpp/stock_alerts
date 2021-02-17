@@ -89,15 +89,17 @@ def process_batch(df_price, symbol):
 
 def manage_delist(df_delist, main_table, count_table='count_fail', max_try=21):
     insert_on_conflict_do_increment(df_delist, table_name=count_table, count_col='count')
-    # main_table is also timeframe
-    symbols = read_from_sql_statement(
-        f"SELECT symbol FROM {count_table} WHERE count >= {max_try} AND timeframe = '{main_table}'")
 
-    if not symbols['symbol'].empty:
-        symbols = ", ".join("'{0}'".format(s) for s in symbols)
-        execute_sql_statement(f"DELETE FROM {count_table} WHERE symbol in ({symbols}) AND timeframe = '{main_table}'")
-        execute_sql_statement(f'DELETE FROM "{main_table}" WHERE symbol in ({symbols})')
-        insert_on_conflict_ignore()
+    # main_table is also timeframe
+    filter_symbol = f"SELECT symbol FROM {count_table} WHERE count >= {max_try} AND timeframe = '{main_table}'"
+    execute_sql_statement(
+        f"""DELETE FROM {count_table} WHERE symbol in ({filter_symbol}) AND timeframe = '{main_table}'""")
+    execute_sql_statement(f'''DELETE FROM "{main_table}" WHERE symbol in ({filter_symbol})''')
+
+    df = read_from_sql_statement(filter_symbol)
+    if not df.empty:
+        df['timeframe'] = main_table
+        insert_on_conflict_ignore(df, table_name='delisted')
 
 
 def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=500):
