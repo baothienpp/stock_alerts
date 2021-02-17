@@ -33,7 +33,7 @@ def calculate_william(df, symbol, period):
     return df_symbol
 
 
-def add_indicators(table='', symbols=None, mode='full', batch_size=50):
+def add_indicators(table='', symbols=None, mode='full', batch_size=100):
     log.info('Indicators')
     william_period = 100
     if not isColumnExist(col='william', table=table):
@@ -131,7 +131,7 @@ if __name__ == '__main__':
             log.debug('Message error')
             continue
 
-        batch_size = 50
+        batch_size = 100
         add_indicators(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
 
         if table == '1d':
