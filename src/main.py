@@ -111,7 +111,7 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
 
     if not isTableExist(table=f"{timeframe}"):
         log.info(f'table {timeframe} not exist. Creating ...')
-        execute_sql_statement(PRICE_TABLE_SQL.replace('{table_name}', f'\"{timeframe}\"'))
+        execute_sql_statement(PRICE_TABLE_SQL.format(table_name=timeframe))
     now = datetime.now()
 
     if timeframe == '1d':
@@ -167,12 +167,12 @@ def update_db(timeframe, batch_size=500):
     now = datetime.now()
 
     log.info('Get symbols and last date')
-    SYMBOL_LAST_DATE_SUBQUERY = SYMBOL_LAST_DATE.replace('{table_name}', f'"{timeframe}"')
+    SYMBOL_LAST_DATE_SUBQUERY = SYMBOL_LAST_DATE.format(table_name=timeframe)
     execute_sql_statement('DROP TABLE IF EXISTS tmp_symbol_lastdate')
-    execute_sql_statement(CREATE_TEMPORARY_TABLE.replace('{table_name}', 'tmp_symbol_lastdate').replace('{sub_query}',
-                                                                                                        SYMBOL_LAST_DATE_SUBQUERY))
+    execute_sql_statement(
+        CREATE_TEMPORARY_TABLE.format(table_name='tmp_symbol_lastdate', sub_query=SYMBOL_LAST_DATE_SUBQUERY))
 
-    current_db = read_from_sql_statement(SYMBOL_LAST_DATE.replace('{table_name}', f'"{timeframe}"'))
+    current_db = read_from_sql_statement(SYMBOL_LAST_DATE.format(table_name=timeframe))
     current_db = current_db[~current_db['symbol'].isin(delisted)]
     current_db['datetime'] = current_db['datetime'].dt.date.astype(str)
 
@@ -185,7 +185,7 @@ def update_db(timeframe, batch_size=500):
 
     log.info('Delete last date')
     execute_sql_statement(
-        DELETE_LAST_DATE.replace('{table_name}', f'"{timeframe}"').replace('{sub_table}', 'tmp_symbol_lastdate'))
+        DELETE_LAST_DATE.format(table_name=timeframe, sub_table='tmp_symbol_lastdate'))
 
     download = lambda x: get_history(*x)
     log.info('Start downloading ...')

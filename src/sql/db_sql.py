@@ -6,7 +6,7 @@ SYMBOL_TABLE_SQL = '''CREATE TABLE IF NOT EXISTS public.{table_name} (
                         UNIQUE (symbol)
                 )'''
 
-PRICE_TABLE_SQL = '''CREATE TABLE IF NOT EXISTS public.{table_name} (
+PRICE_TABLE_SQL = '''CREATE TABLE IF NOT EXISTS public."{table_name}" (
                         datetime timestamp NULL,
                         symbol varchar NULL,
                         "open" numeric NULL,
@@ -20,12 +20,13 @@ PRICE_TABLE_SQL = '''CREATE TABLE IF NOT EXISTS public.{table_name} (
 DELISTED_TABLE = '''CREATE TABLE IF NOT EXISTS delisted (
                         symbol varchar NULL,
                         timeframe varchar NULL,
-                        UNIQUE (symbol)
+                        UNIQUE (symbol, timeframe)
                     )'''
 
 WHITELIST_TABLE = '''CREATE TABLE IF NOT EXISTS whitelist (
                         symbol varchar NULL,
-                        UNIQUE (symbol)
+                        timeframe varchar NULL,
+                        UNIQUE (symbol, timeframe)
                     )'''
 
 COUNT_FAIL_TABLE = '''CREATE TABLE IF NOT EXISTS count_fail (
@@ -38,7 +39,7 @@ COUNT_FAIL_TABLE = '''CREATE TABLE IF NOT EXISTS count_fail (
 SYMBOL_LAST_DATE = '''SELECT symbol, datetime 
                       FROM (
                            SELECT *, row_number() OVER (PARTITION BY symbol ORDER BY datetime DESC) r 
-                           FROM {table_name}
+                           FROM "{table_name}"
                             ) T
                      WHERE T.r=1'''
 
@@ -46,7 +47,7 @@ CREATE_TEMPORARY_TABLE = '''
                             CREATE TEMPORARY TABLE {table_name} AS
                                 {sub_query}
                          '''
-DELETE_LAST_DATE = '''DELETE FROM {table_name} as A WHERE EXISTS (
+DELETE_LAST_DATE = '''DELETE FROM "{table_name}" as A WHERE EXISTS (
                         SELECT 1 FROM {sub_table} C
                             WHERE A.symbol = C.symbol and A.datetime = C.datetime 
                          )
