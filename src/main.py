@@ -87,6 +87,7 @@ def process_batch(df_price, symbol):
         return symbol
 
 
+# TODO reset counter if success next dowload time
 def manage_delist(df_delist, main_table, count_table='count_fail', max_try=21):
     insert_on_conflict_do_increment(df_delist, table_name=count_table, count_col='count')
 
@@ -100,6 +101,8 @@ def manage_delist(df_delist, main_table, count_table='count_fail', max_try=21):
     if not df.empty:
         df['timeframe'] = main_table
         insert_on_conflict_ignore(df, table_name='delisted')
+
+    # Reset counter
 
 
 def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=500):
@@ -146,6 +149,7 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
         no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
+        # TODO input the list of download sucess symbol to manage_delist to reset counter
         manage_delist(delist_df, main_table=timeframe, count_table='count_fail')
 
         message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
