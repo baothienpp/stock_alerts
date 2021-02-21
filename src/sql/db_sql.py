@@ -84,3 +84,7 @@ SELECT_SYMBOL_WITH_FILTER = '''SELECT {cols} FROM public."{table}"
                                   WHERE symbol IN ({symbol_list}) {extra_filter}'''
 
 EXECLUDE_EXCHANGE = """ SELECT symbol FROM {profile_table} WHERE exchange IN ({exchange})"""
+
+RESET_COUNTER = """ UPDATE {table}
+                        SET count = 0,
+                        WHERE symbol in ({symbol_list}) and timeframe='{timeframe}'"""

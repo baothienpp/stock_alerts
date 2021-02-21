@@ -88,7 +88,7 @@ def process_batch(df_price, symbol):
 
 
 # TODO reset counter if success next dowload time
-def manage_delist(df_delist, main_table, count_table='count_fail', max_try=21):
+def manage_delist(df_delist, available_symbol, main_table, count_table='count_fail', max_try=21):
     insert_on_conflict_do_increment(df_delist, table_name=count_table, count_col='count')
 
     # main_table is also timeframe
@@ -103,6 +103,9 @@ def manage_delist(df_delist, main_table, count_table='count_fail', max_try=21):
         insert_on_conflict_ignore(df, table_name='delisted')
 
     # Reset counter
+    symbols_string_list = ", ".join("'{0}'".format(s) for s in available_symbol)
+    execute_sql_statement(
+        RESET_COUNTER.format(table=count_table, symbol_list=symbols_string_list, timeframe=main_table))
 
 
 def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_size=500):
@@ -137,7 +140,6 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
     else:
         download = lambda symbol: get_history(symbol, interval=timeframe, start=start_time, end=end_time)
 
-    # download(symbol_to_download[:10])
     for symbols in chunks(symbol_to_download, batch_size):
         output = process_pool.map(download, symbols)
 
@@ -149,8 +151,8 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
         no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-        # TODO input the list of download sucess symbol to manage_delist to reset counter
-        manage_delist(delist_df, main_table=timeframe, count_table='count_fail')
+        manage_delist(df_delist=delist_df, available_symbol=data_df['symbol'], main_table=timeframe,
+                      count_table='count_fail')
 
         message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
         log.info(f'Sending data to indicator consumer: {message}')
@@ -199,12 +201,14 @@ def update_db(timeframe, batch_size=500):
         output = process_pool.map(download, args)
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
-        insert_on_conflict_do_update(pd.concat(data), table_name=f'\"{timeframe}\"', schema='public', batch=5000)
+        data_df = pd.concat(data)
+        insert_on_conflict_do_update(data_df, table_name=f'\"{timeframe}\"', schema='public', batch=5000)
 
         no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-        manage_delist(delist_df, main_table=timeframe, count_table='count_fail')
+        manage_delist(df_delist=delist_df, available_symbol=data_df['symbol'], main_table=timeframe,
+                      count_table='count_fail')
 
         symbols = [arg[0] for arg in args]
         message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='append').to_dict()
