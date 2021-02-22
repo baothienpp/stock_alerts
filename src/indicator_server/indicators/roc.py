@@ -38,8 +38,13 @@ def calculate_roc(df, past_date_col='last_day'):
                                  right_on='datetime',
                                  by='symbol',
                                  suffixes=('', '_y'))
-    lastprice_df['roc_' + past_date_col] = lastprice_df.apply(
-                                                    lambda row: (row['close'] - row['close_y']) / row['close_y'] * 100,
-                                                    axis=1)
+
+    def roc(row):
+        try:
+            return ((row['close'] - row['close_y']) / row['close_y']) * 100
+        except Exception:
+            return 0
+
+    lastprice_df['roc_' + past_date_col] = lastprice_df.apply(roc, axis=1)
     lastprice_df.drop(columns=[past_date_col, 'datetime_y', 'close_y'], inplace=True)
     return lastprice_df

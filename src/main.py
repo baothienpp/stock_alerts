@@ -151,7 +151,7 @@ def fill_db(timeframe, period=None, profile_table='', avgVolumne=200000, batch_s
         no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-        manage_delist(df_delist=delist_df, available_symbol=data_df['symbol'], main_table=timeframe,
+        manage_delist(df_delist=delist_df, available_symbol=data_df['symbol'].unique(), main_table=timeframe,
                       count_table='count_fail')
 
         message = KafkaMessage(table=timeframe, symbols=symbols, period=100, mode='full').to_dict()
@@ -207,7 +207,7 @@ def update_db(timeframe, batch_size=500):
         no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
         delist_df = pd.DataFrame(no_data_symbol, columns=['symbol'])
         delist_df['timeframe'] = timeframe
-        manage_delist(df_delist=delist_df, available_symbol=data_df['symbol'], main_table=timeframe,
+        manage_delist(df_delist=delist_df, available_symbol=data_df['symbol'].unique(), main_table=timeframe,
                       count_table='count_fail')
 
         symbols = [arg[0] for arg in args]
@@ -258,7 +258,7 @@ def refresh_symbol(timeframe, period=None):
         exchanges = ", ".join("'{0}'".format(e) for e in delist_exchange)
         symbols = read_from_sql_statement(EXECLUDE_EXCHANGE.format(profile_table=PROFILE_TABLE, exchange=exchanges))
         symbols['timeframe'] = timeframe
-        insert_on_conflict_do_update(symbols, table_name='delisted')
+        insert_on_conflict_ignore(symbols, table_name='delisted')
     else:
         SYMBOL_TABLE = f'symbol_{SYMBOL_PROVIDER.lower()}'
         PROFILE_TABLE = f'profile_{SYMBOL_PROVIDER.lower()}'
