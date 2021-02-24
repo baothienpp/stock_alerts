@@ -113,6 +113,7 @@ def add_roc(table='', symbols=None, mode='full', batch_size=100):
 
         for col in date_cols:
             df_roc = calculate_roc(df_selected, past_date_col=col)
+            df_roc.drop_duplicates(subset=['datetime', 'symbol'], inplace=True)
             log.info('Inserting into db ...')
             insert_on_conflict_do_update(df_roc, table_name=f'\"{table}\"', schema='public', batch=5000)
 

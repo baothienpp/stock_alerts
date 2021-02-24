@@ -202,6 +202,7 @@ def update_db(timeframe, batch_size=500):
 
         data = [obj for obj in output if isinstance(obj, pd.DataFrame)]
         data_df = pd.concat(data)
+        data_df.drop_duplicates(subset=['datetime', 'symbol'], inplace=True)
         insert_on_conflict_do_update(data_df, table_name=f'\"{timeframe}\"', schema='public', batch=5000)
 
         no_data_symbol = [symbol for symbol in output if isinstance(symbol, str)]
