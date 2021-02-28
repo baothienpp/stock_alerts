@@ -174,9 +174,9 @@ def update_db(timeframe, batch_size=500):
 
     log.info('Get symbols and last date')
     SYMBOL_LAST_DATE_SUBQUERY = SYMBOL_LAST_DATE.format(table_name=timeframe)
-    execute_sql_statement('DROP TABLE IF EXISTS tmp_symbol_lastdate')
-    execute_sql_statement(
-        CREATE_TEMPORARY_TABLE.format(table_name='tmp_symbol_lastdate', sub_query=SYMBOL_LAST_DATE_SUBQUERY))
+    execute_sql_statement('DROP TABLE IF EXISTS tmp_symbol_lastdate;' +
+                          CREATE_TEMPORARY_TABLE.format(table_name='tmp_symbol_lastdate',
+                                                        sub_query=SYMBOL_LAST_DATE_SUBQUERY))
 
     current_db = read_from_sql_statement(SYMBOL_LAST_DATE.format(table_name=timeframe))
     current_db = current_db[~current_db['symbol'].isin(delisted)]
