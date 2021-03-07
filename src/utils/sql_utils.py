@@ -7,7 +7,8 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy import create_engine
 
 db_secret = 'stock'
-db_host = 'localhost'
+# db_host = 'localhost'
+db_host = '130.61.157.218'
 db_port = 54329
 
 db_uri = f'postgresql://{db_secret}:{db_secret}@{db_host}:{db_port}/{db_secret}'
