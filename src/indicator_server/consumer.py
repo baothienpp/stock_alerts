@@ -12,10 +12,10 @@ from src.kafka_setting import KAFKA_GROUP_ID, KAFKA_TOPIC
 pd.options.mode.chained_assignment = None
 
 
-# consumer = KafkaConsumer(KAFKA_TOPIC,
-#                          group_id=KAFKA_GROUP_ID,
-#                          value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-#                          bootstrap_servers=['localhost:9092'])
+consumer = KafkaConsumer(KAFKA_TOPIC,
+                         group_id=KAFKA_GROUP_ID,
+                         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                         bootstrap_servers=['localhost:9092'])
 
 
 def prefilter(df):
