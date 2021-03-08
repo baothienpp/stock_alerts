@@ -1,5 +1,6 @@
 import json
 from kafka import KafkaConsumer
+from functools import reduce
 from src.utils.logging import log
 
 from src.indicator_server.indicators.indicators import TA
@@ -10,10 +11,11 @@ from src.kafka_setting import KAFKA_GROUP_ID, KAFKA_TOPIC
 
 pd.options.mode.chained_assignment = None
 
-consumer = KafkaConsumer(KAFKA_TOPIC,
-                         group_id=KAFKA_GROUP_ID,
-                         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-                         bootstrap_servers=['localhost:9092'])
+
+# consumer = KafkaConsumer(KAFKA_TOPIC,
+#                          group_id=KAFKA_GROUP_ID,
+#                          value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+#                          bootstrap_servers=['localhost:9092'])
 
 
 def prefilter(df):
@@ -98,24 +100,28 @@ def add_roc(table='', symbols=None, mode='full', batch_size=100):
                 offset = offset['max'].iloc[0]
                 offset = '{}d'.format(offset + 7)
 
-            df_selected = read_from_sql_statement(
+            df_n_last_row = read_from_sql_statement(
                 SELECT_LAST_N_ROWS.format(table_name=table, n_rows=1, symbols=symbols_string_list))
 
-            date_cols = get_past_date(df_selected)
-            extra_filter = filter_date_range_query(df_selected, date_cols=date_cols, offset=offset)
+            date_cols = get_past_date(df_n_last_row)
+            extra_filter = filter_date_range_query(df_n_last_row, date_cols=date_cols, offset=offset)
             query = SELECT_SYMBOL_WITH_FILTER.format(table=table, symbol_list=symbols_string_list,
                                                      cols='datetime, symbol, close',
                                                      extra_filter=f'AND ({extra_filter})')
             df_past_date = read_from_sql_statement(query)
-            df_selected = pd.concat([df_selected, df_past_date])
-            df_selected = df_selected[['datetime', 'symbol', 'close']]
-            get_past_date(df_selected)
+            df_n_last_row = pd.concat([df_n_last_row, df_past_date])
+            df_n_last_row = df_n_last_row[['datetime', 'symbol', 'close']]
+            get_past_date(df_n_last_row)
 
+        df_roc_list = []
         for col in date_cols:
-            df_roc = calculate_roc(df_selected, past_date_col=col)
+            df_roc = calculate_roc(df_n_last_row, past_date_col=col)
+            df_roc.drop(columns=['close'], inplace=True)
             df_roc.drop_duplicates(subset=['datetime', 'symbol'], inplace=True)
-            log.info('Inserting into db ...')
-            insert_on_conflict_do_update(df_roc, table_name=f'\"{table}\"', schema='public', batch=5000)
+            df_roc_list.append(df_roc.copy())
+        df_roc = reduce(lambda x, y: pd.merge(x, y, on=['datetime', 'symbol'], how='inner'), df_roc_list)
+        log.info('Inserting into db ...')
+        insert_on_conflict_do_update(df_roc, table_name=f'\"{table}\"', schema='public', batch=5000)
 
 
 if __name__ == '__main__':
@@ -139,3 +145,4 @@ if __name__ == '__main__':
             add_roc(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
 
         log.info('Finish')
+

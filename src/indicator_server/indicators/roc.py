@@ -28,6 +28,13 @@ def get_past_date(df, return_date_cols=True):
         return ['last_year', 'last_quarter', 'last_6_months', 'last_month', 'last_friday', 'last_day']
 
 
+def roc(row):
+    try:
+        return ((row['close'] - row['close_y']) / row['close_y']) * 100
+    except Exception:
+        return 0
+
+
 def calculate_roc(df, past_date_col='last_day'):
     df['datetime'] = pd.to_datetime(df['datetime'])
     df[past_date_col] = pd.to_datetime(df[past_date_col])
@@ -38,12 +45,6 @@ def calculate_roc(df, past_date_col='last_day'):
                                  right_on='datetime',
                                  by='symbol',
                                  suffixes=('', '_y'))
-
-    def roc(row):
-        try:
-            return ((row['close'] - row['close_y']) / row['close_y']) * 100
-        except Exception:
-            return 0
 
     lastprice_df['roc_' + past_date_col] = lastprice_df.apply(roc, axis=1)
     lastprice_df.drop(columns=[past_date_col, 'datetime_y', 'close_y'], inplace=True)
