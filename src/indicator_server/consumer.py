@@ -82,9 +82,9 @@ def add_roc(table='', symbols=None, mode='full', batch_size=100):
 
         log.info('Get data ...')
         if mode == 'full':
-            df_selected = read_from_sql_statement(
+            df_prices = read_from_sql_statement(
                 f'''SELECT datetime, symbol, close FROM "{table}" WHERE symbol in ({symbols_string_list})''')
-            date_cols = get_past_date(df_selected)
+            date_cols = get_past_date(df_prices)
             # Add columns to table
             for col in date_cols:
                 execute_sql_statement(
@@ -100,22 +100,22 @@ def add_roc(table='', symbols=None, mode='full', batch_size=100):
                 offset = offset['max'].iloc[0]
                 offset = '{}d'.format(offset + 7)
 
-            df_n_last_row = read_from_sql_statement(
+            df_prices = read_from_sql_statement(
                 SELECT_LAST_N_ROWS.format(table_name=table, n_rows=1, symbols=symbols_string_list))
 
-            date_cols = get_past_date(df_n_last_row)
-            extra_filter = filter_date_range_query(df_n_last_row, date_cols=date_cols, offset=offset)
+            date_cols = get_past_date(df_prices)
+            extra_filter = filter_date_range_query(df_prices, date_cols=date_cols, offset=offset)
             query = SELECT_SYMBOL_WITH_FILTER.format(table=table, symbol_list=symbols_string_list,
                                                      cols='datetime, symbol, close',
                                                      extra_filter=f'AND ({extra_filter})')
             df_past_date = read_from_sql_statement(query)
-            df_n_last_row = pd.concat([df_n_last_row, df_past_date])
-            df_n_last_row = df_n_last_row[['datetime', 'symbol', 'close']]
-            get_past_date(df_n_last_row)
+            df_prices = pd.concat([df_prices, df_past_date])
+            df_prices = df_prices[['datetime', 'symbol', 'close']]
+            get_past_date(df_prices)
 
         df_roc_list = []
         for col in date_cols:
-            df_roc = calculate_roc(df_n_last_row, past_date_col=col)
+            df_roc = calculate_roc(df_prices, past_date_col=col)
             df_roc.drop(columns=['close'], inplace=True)
             df_roc.drop_duplicates(subset=['datetime', 'symbol'], inplace=True)
             df_roc_list.append(df_roc.copy())
