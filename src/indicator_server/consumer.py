@@ -138,7 +138,7 @@ if __name__ == '__main__':
             log.debug('Message error')
             continue
 
-        batch_size = 100
+        batch_size = 300
         add_indicators(table=table, symbols=symbols, mode=mode, batch_size=batch_size)
 
         if table == '1d':
